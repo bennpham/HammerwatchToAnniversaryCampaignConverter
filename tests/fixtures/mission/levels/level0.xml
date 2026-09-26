@@ -1,0 +1,130 @@
+<dictionary>
+<dictionary name="tilemap">
+<array name="tiledata"><dictionary>
+<int name="x">0</int>
+<int name="y">0</int>
+<array name="datasets"><dictionary>
+<string name="tileset">tilemaps/a_default.xml</string>
+<int-arr name="data-t">0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 2</int-arr>
+<int-arr name="data-r">255</int-arr>
+</dictionary></array>
+</dictionary></array>
+</dictionary>
+<dictionary name="doodads">
+<array name="doodads"><dictionary>
+<int name="id">0</int>
+<string name="type">doodads/theme_a/a_x_t_l.xml</string>
+<float name="x">3.000000</float>
+<float name="y">4.000000</float>
+<bool name="need-sync">False</bool>
+</dictionary><dictionary>
+<int name="id">1</int>
+<string name="type">doodads/special/color_theme_a_16.xml</string>
+<float name="x">1.500000</float>
+<float name="y">1.500000</float>
+<bool name="need-sync">False</bool>
+</dictionary><dictionary>
+<int name="id">2</int>
+<string name="type">doodads/special/vendor_defense.xml</string>
+<float name="x">5.000000</float>
+<float name="y">5.000000</float>
+<bool name="need-sync">False</bool>
+</dictionary><dictionary>
+<int name="id">3</int>
+<string name="type">doodads/generic/lamp_torch_off.xml</string>
+<float name="x">6.500000</float>
+<float name="y">1.000000</float>
+<bool name="need-sync">False</bool>
+</dictionary></array>
+</dictionary>
+<dictionary name="actors">
+<array name="actors"><dictionary>
+<int name="id">4</int>
+<string name="type">actors/skeleton_1_small.xml</string>
+<float name="x">2.500000</float>
+<float name="y">2.250000</float>
+</dictionary></array>
+</dictionary>
+<dictionary name="scripting">
+<array name="nodes"><dictionary>
+<int name="id">10</int>
+<string name="type">LevelStart</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">1.000000</float>
+<float name="y">1.000000</float>
+<dictionary name="parameters">
+<int name="id">0</int>
+<int name="dir">2</int>
+</dictionary>
+</dictionary><dictionary>
+<int name="id">11</int>
+<string name="type">RectangleShape</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">8.000000</float>
+<float name="y">8.000000</float>
+<dictionary name="parameters">
+<float name="w">2.000000</float>
+<float name="h">1.000000</float>
+<int name="types">15</int>
+</dictionary>
+</dictionary><dictionary>
+<int name="id">12</int>
+<string name="type">LevelExitArea</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">8.000000</float>
+<float name="y">9.000000</float>
+<dictionary name="parameters">
+<string name="level">1</string>
+<int name="start id">0</int>
+<dictionary name="shape">
+<int-arr name="static">11</int-arr>
+</dictionary>
+</dictionary>
+</dictionary><dictionary>
+<int name="id">13</int>
+<string name="type">ShopArea</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">5.000000</float>
+<float name="y">6.000000</float>
+<dictionary name="parameters">
+<string name="cats">def1 def2 def3 def4 def5</string>
+<dictionary name="shape">
+<int-arr name="static">14</int-arr>
+</dictionary>
+</dictionary>
+</dictionary><dictionary>
+<int name="id">14</int>
+<string name="type">RectangleShape</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">5.000000</float>
+<float name="y">6.000000</float>
+<dictionary name="parameters">
+<float name="w">1.000000</float>
+<float name="h">1.000000</float>
+<int name="types">15</int>
+</dictionary>
+</dictionary></array>
+</dictionary>
+<dictionary name="items">
+<array name="items"><dictionary>
+<int name="id">5</int>
+<string name="type">items/valuable_4.xml</string>
+<float name="x">3.500000</float>
+<float name="y">3.500000</float>
+</dictionary></array>
+</dictionary>
+<dictionary name="lighting">
+<array name="lights"></array>
+<dictionary name="ambient-color">
+<int name="r">255</int>
+<int name="g">255</int>
+<int name="b">255</int>
+<int name="a">255</int>
+</dictionary>
+</dictionary>
+</dictionary>

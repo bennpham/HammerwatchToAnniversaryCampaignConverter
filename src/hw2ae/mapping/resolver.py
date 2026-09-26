@@ -1,0 +1,166 @@
+"""HW1 resource path → AE placement.
+
+Three rule families cover what a level mostly consists of; everything else goes
+through the curated ``data/units.json``:
+
+* theme walls  ``doodads/theme_<t>/<t>_<piece>.xml``
+* cover        ``doodads/special/color_theme_<t>_<N>.xml``
+* doors        ``items/door_<t>_<metal>_<h|v>[_...].xml``
+
+Pixel offsets keep the art where HW1 drew it: ``AE origin - HW1 origin``. The
+wall numbers below were checked against every paired Castle Hammerwatch level
+(HW1 ``h`` walls anchor both games, so they have zero offset).
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from ..ae.assets import AssetIndex
+
+DATA = Path(__file__).parent / "data"
+
+# HW1 wall piece suffix -> AE candidates (name, dx, dy), first that exists wins.
+# Prison/armory name caps cap_h_*/cap_v_* and long runs h_32/v_32; archives,
+# chambers and battlements use cap_n/s/e/w and h/v. The AE bonus themes kept
+# the HW1 names, which the final "same name" fallback catches.
+WALL_PIECES: dict[str, list[tuple[str, int, int]]] = {
+    "h_8": [("h_16", 0, 0)],
+    "h_16": [("h_32", 0, 0), ("h", 0, 0)],
+    "v_8": [("v_16", 0, 0)],
+    "v_16": [("v_32", 0, -16), ("v", 0, -16)],
+    "crn_l_up": [("crn_nw", 0, 16)],
+    "crn_r_up": [("crn_ne", 0, 16)],
+    "crn_l_dn": [("crn_sw", 0, 0)],
+    "crn_r_dn": [("crn_se", 0, 0)],
+    "x_t_l": [("x_w", 0, 16)],
+    "x_t_r": [("x_e", 0, 16)],
+    "x_t_up": [("x_n", 0, 16)],
+    "x_t_dn": [("x_s", 0, 0)],
+    "x_x": [("x_x", 0, 16)],
+    "h_cap_l": [("cap_h_w", 0, 0), ("cap_w", 0, 0)],
+    "h_cap_r": [("cap_h_e", 0, 0), ("cap_e", 0, 0)],
+    "v_cap_up": [("cap_v_n", 0, 16), ("cap_n", 0, 16)],
+    "v_cap_dn": [("cap_v_s", 0, 0), ("cap_s", 0, 0)],
+    # AE exits are 64 px wide against HW1's 32; centre them on the HW1 opening.
+    "exit_h_up": [("exit_up", -16, 0)],
+    "exit_h_dn": [("exit_dn", -16, 0)],
+}
+
+WALL_RE = re.compile(r"^doodads/theme_(\w+?)/\1_(.+)\.xml$")
+COVER_RE = re.compile(r"^doodads/special/color_theme_(\w+?)_(\d+)\.xml$")
+BLACK_RE = re.compile(r"^doodads/special/color_black_(\d+)\.xml$")
+DOOR_RE = re.compile(r"^items/door_(\w)_(bronze|silver|gold)_(h|v)(.*)\.xml$")
+
+
+@dataclass
+class Placement:
+    kind: str  # "unit" or "prefab"
+    path: str
+    dx: float = 0.0
+    dy: float = 0.0
+    params: dict = field(default_factory=dict)
+    replaces_script: str | None = None
+    is_exit: bool = False
+
+
+@dataclass
+class Dropped:
+    reason: str
+
+
+class Resolver:
+    def __init__(self, assets: AssetIndex, data_dir: Path = DATA):
+        self.assets = assets
+        self.themes: dict = {k: v for k, v in json.loads((data_dir / "themes.json").read_text()).items()
+                             if not k.startswith("_")}
+        self.units: dict = {k: v for k, v in json.loads((data_dir / "units.json").read_text()).items()
+                            if not k.startswith("_")}
+        self.tilesets: dict = {k: v for k, v in json.loads((data_dir / "tilesets.json").read_text()).items()
+                               if not k.startswith("_")}
+        self._cache: dict[str, Placement | Dropped | None] = {}
+
+    # -- objects ---------------------------------------------------------
+    def resolve(self, hw1_path: str) -> Placement | Dropped | None:
+        """``None`` means unmapped: the caller reports it and leaves it out."""
+        key = hw1_path.replace("\\", "/")
+        if key not in self._cache:
+            self._cache[key] = self._resolve(key)
+        return self._cache[key]
+
+    def _resolve(self, p: str) -> Placement | Dropped | None:
+        entry = self.units.get(p)
+        if entry is not None:
+            if "drop" in entry:
+                return Dropped(entry["drop"])
+            if "prefab" in entry:
+                return self._checked(Placement("prefab", entry["prefab"], entry.get("dx", 0), entry.get("dy", 0),
+                                               replaces_script=entry.get("replaces_script")))
+            return self._checked(Placement("unit", entry["ae"], entry.get("dx", 0), entry.get("dy", 0),
+                                           dict(entry.get("params", {}))))
+
+        m = WALL_RE.match(p)
+        if m:
+            return self._wall(m.group(1), m.group(2))
+        m = COVER_RE.match(p)
+        if m:
+            theme = self.themes.get(m.group(1))
+            if theme is None:
+                return None
+            n = int(m.group(2))
+            return self._checked(Placement("unit", f"doodads/walls/{theme['walls']}/__color_{n}.unit", 0, n))
+        m = BLACK_RE.match(p)
+        if m:
+            return self._checked(Placement("unit", f"doodads/ledges/__black_{m.group(1)}.unit", 0, 0))
+        m = DOOR_RE.match(p)
+        if m:
+            return self._door(*m.groups())
+        return None
+
+    def _checked(self, pl: Placement) -> Placement | None:
+        return pl if self.assets.exists(pl.path) else None
+
+    def _wall(self, letter: str, piece: str) -> Placement | None:
+        theme = self.themes.get(letter)
+        if theme is None:
+            return None
+        folder = f"doodads/walls/{theme['walls']}"
+        cands = WALL_PIECES.get(piece, []) + [(piece, 0, 0)]
+        for name, dx, dy in cands:
+            path = f"{folder}/{name}.unit"
+            if self.assets.exists(path):
+                return Placement("unit", path, dx, dy, is_exit=name.startswith("exit_"))
+        return None
+
+    def _door(self, letter: str, metal: str, orient: str, rest: str) -> Placement | None:
+        theme = self.themes.get(letter)
+        if theme is None:
+            return None
+        part = "mid"
+        if "cap_l" in rest:
+            part = "cap_l"
+        elif "cap_r" in rest:
+            part = "cap_r"
+        elif "cap_up" in rest:
+            part = "cap_u"
+        elif "cap_dn" in rest:
+            part = "cap_d"
+        path = f"doodads/doors/door_{orient}_{part}_{metal}_{theme['doors']}.unit"
+        return self._checked(Placement("unit", path))
+
+    # -- tiles -----------------------------------------------------------
+    def tileset(self, hw1_tileset: str) -> list[str] | None:
+        out = self.tilesets.get(hw1_tileset.replace("\\", "/"))
+        if out is None:
+            return None
+        return [t for t in out if self.assets.exists(t)] or None
+
+    def theme_of(self, hw1_path: str) -> str | None:
+        for rx in (WALL_RE, COVER_RE):
+            m = rx.match(hw1_path)
+            if m and m.group(1) in self.themes:
+                return m.group(1)
+        return None

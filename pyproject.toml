@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hw2ae"
+version = "0.1.0"
+description = "Convert Hammerwatch 1 missions and campaigns into playable Hammerwatch Anniversary Edition scenarios"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+preview = ["pillow"]
+test = ["pytest"]
+
+[project.scripts]
+hw2ae = "hw2ae.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"hw2ae.mapping" = ["data/*.json"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

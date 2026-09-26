@@ -1,0 +1,6 @@
+<levels start="0">
+<act name="lvl.act1">
+<level id="0" res="levels/level0.xml" name="lvl.floor?floor=0" />
+<level id="1" res="levels/level1.xml" name="lvl.floor?floor=1" />
+</act>
+</levels>

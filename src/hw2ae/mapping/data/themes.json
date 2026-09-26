@@ -1,0 +1,12 @@
+{
+  "_doc": "HW1 theme letter -> AE theme. 'walls' is the folder under doodads/walls/, 'doors' the suffix of doodads/doors/door_*_<doors>.unit, 'env' the lighting environment used when a level is mostly this theme. Letters a-d and the bonus themes were confirmed by pairing the HW1 and AE Castle Hammerwatch levels.",
+  "a": {"name": "prison", "walls": "prison", "doors": "prison", "env": "effects/lighting/prison_1.env"},
+  "b": {"name": "armory", "walls": "armory", "doors": "armory", "env": "effects/lighting/armory_1.env"},
+  "c": {"name": "archives", "walls": "archives", "doors": "archives", "env": "effects/lighting/archives_1.env"},
+  "d": {"name": "chambers", "walls": "chambers", "doors": "chambers", "env": "effects/lighting/chambers_1.env"},
+  "bonus1": {"name": "bonus 1", "walls": "bonus1", "doors": "prison", "env": "effects/lighting/bonus.env"},
+  "bonus2": {"name": "bonus 2", "walls": "bonus2", "doors": "prison", "env": "effects/lighting/bonus.env"},
+  "bonus3": {"name": "bonus 3", "walls": "bonus3", "doors": "prison", "env": "effects/lighting/bonus.env"},
+  "bonus4": {"name": "bonus 4", "walls": "bonus4", "doors": "prison", "env": "effects/lighting/bonus.env"},
+  "bonus5": {"name": "bonus 5", "walls": "bonus5", "doors": "prison", "env": "effects/lighting/bonus.env"}
+}
