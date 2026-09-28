@@ -61,13 +61,17 @@ def tileset_size(ae_assets: str, tileset: str) -> int:
 class TileLayers:
     """Collects painted tiles per tileset in AE pixel space and emits cells."""
 
-    def __init__(self, ae_assets: Path):
+    def __init__(self, ae_assets: Path, scenario_dir: Path | None = None):
         self.ae_assets = str(ae_assets)
+        # Tilesets shipped inside the scenario (ported HW1 art) live here.
+        self.scenario_dir = scenario_dir
         # tileset -> set of (tx, ty) in that tileset's own tile units
         self.layers: dict[str, set[tuple[int, int]]] = {}
         self.order: list[str] = []
 
     def size(self, tileset: str) -> int:
+        if self.scenario_dir is not None and (self.scenario_dir / tileset).is_file():
+            return tileset_size(str(self.scenario_dir), tileset)
         return tileset_size(self.ae_assets, tileset)
 
     def paint16(self, tileset: str, tiles16: set[tuple[int, int]],

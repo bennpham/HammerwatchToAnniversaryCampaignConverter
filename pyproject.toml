@@ -13,6 +13,8 @@ dependencies = []
 [project.optional-dependencies]
 preview = ["pillow"]
 test = ["pytest"]
+# Ports HW1 art AE has no counterpart for (custom doodads, water, castle/desert themes).
+port = ["hw2a000ff @ git+https://github.com/bennpham/HW2A000FF-AllPlatform-Remake"]
 
 [project.scripts]
 hw2ae = "hw2ae.cli:main"

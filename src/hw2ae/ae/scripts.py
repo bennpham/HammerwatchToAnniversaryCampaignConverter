@@ -5,7 +5,10 @@ most nodes translate one to one. The differences handled here:
 
 * HW1 shapes (``RectangleShape`` / ``CircleShape``) are AE physics units, not
   scripts; triggers point at them through their ``Areas`` array.
-* ``LevelExitArea`` is two AE scripts: an ``AreaTrigger`` wired to a ``LevelExit``.
+* ``LevelExitArea`` is two AE scripts: an ``AreaTrigger`` wired to a ``LevelExit``
+  (just the ``LevelExit`` when it has no shape and only other scripts fire it).
+* ``AllPlayersAreaTrigger`` fires through its ``OnAllEntered`` feed, not links.
+* ``PlaySound`` takes an AE FMOD event, looked up in ``mapping/data/sounds.json``.
 * ``GameEnd`` is an ``AnnounceText`` followed by ``ShowGameOver`` (credits).
 * ``ShopArea`` is a ``UseTrigger`` on its area feeding an AE ``ShopArea``, the
   way Castle Hammerwatch's shops are wired. (AE's shop prefabs pick their
@@ -15,7 +18,9 @@ most nodes translate one to one. The differences handled here:
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable
 
 from .. import sval
@@ -26,6 +31,14 @@ TILE = 16
 
 # UseTrigger's shop icon, as on Castle Hammerwatch's shops.
 SHOP_ICON = 4
+
+# AE scripts that fire their targets through a named feed rather than links.
+FEED_LINKS = {"AllPlayersAreaTrigger": "OnAllEntered"}
+
+# HW1 sound (sound bank file:name) -> AE FMOD event, as AE's own levels use them.
+SOUNDS: dict[str, str] = {k: v for k, v in json.loads(
+    (Path(__file__).parent.parent / "mapping" / "data" / "sounds.json").read_text()).items()
+    if not k.startswith("_")}
 
 # HW1 AreaTrigger ``types`` bits -> AE AreaFilter bits.
 _AREA_FILTER = {1: 2, 2: 4, 4: 8 | 16 | 32, 8: 64}
@@ -107,13 +120,21 @@ def convert_scripts(nodes: list[ScriptNode], ctx: ScriptContext) -> None:
         first.trigger_times = n.trigger_times
         # The last script of an expansion carries the node's outgoing links.
         last = made[-1]
+        links: list[tuple[int, int]] = []
         for target, delay in zip(n.connections, n.delays):
             if target in ctx.dropped:
                 continue
             t = ctx.id_map.get(target)
             if t is None or target not in by_id:
                 continue
-            last.connections.append((t, int(delay)))
+            links.append((t, int(delay)))
+        feed = FEED_LINKS.get(last.cls)
+        if feed:
+            last.params.append(Param("ids", feed, [t for t, _ in links]))
+            if any(d for _, d in links):
+                ctx.warn(f"{last.cls} #{last.id}: AE fires {feed} without delays; HW1's link delays are dropped")
+        else:
+            last.connections.extend(links)
         lv.scripts.extend(made)
     for t, k in sorted(unsupported.items()):
         ctx.warn(f"unsupported script node '{t}' x{k}; kept as a plain ScriptLink so its links still fire")
@@ -148,23 +169,47 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
         return [Script("LevelStart", sid, x, y, params=[Param("string", "StartID", start_id)])]
 
     if t == "LevelExitArea":
-        trig = Script("AreaTrigger", sid, x, y, params=[
-            Param("int", "Event", 1),
-            Param("ids", "Areas", _feed(ctx, _ids(p, "shape"))),
-            Param("int", "Filter", 2),
-        ])
         target = str(_val(p, "level", ""))
         lvl = ctx.level_path_for(target)
         if lvl is None:
             ctx.warn(f"level exit points at unknown level id '{target}'")
             lvl = ""
-        exit_ = Script("LevelExit", ctx.level.new_id(), x + 16, y, label=lvl,
+        areas = _feed(ctx, _ids(p, "shape"))
+        # Without a shape the exit is only ever fired by other scripts (a
+        # teleporter pad, say), so it is a lone LevelExit they can execute.
+        exit_ = Script("LevelExit", ctx.level.new_id() if areas else sid, x + 16, y, label=lvl,
                        params=[Param("string", "Level", lvl)])
         start_id = _start_id(_val(p, "start id", 0))
         if start_id is not None:
             exit_.params.append(Param("string", "StartID", start_id))
+        if not areas:
+            return [exit_]
+        trig = Script("AreaTrigger", sid, x, y, params=[
+            Param("int", "Event", 1),
+            Param("ids", "Areas", areas),
+            Param("int", "Filter", 2),
+        ])
         trig.connections.append((exit_.id, 0))
         return [trig, exit_]
+
+    if t == "AllPlayersAreaTrigger":
+        # Fires when every (living) player stands in the area. Its links go in
+        # OnAllEntered, filled by convert_scripts (FEED_LINKS).
+        return [Script("AllPlayersAreaTrigger", sid, x, y, params=[
+            Param("ids", "Areas", _feed(ctx, _ids(p, "shape"))),
+        ])]
+
+    if t == "PlaySound":
+        hw1_sound = str(_val(p, "sound", ""))
+        event = SOUNDS.get(hw1_sound)
+        if event is None:
+            ctx.warn(f"no AE sound for HW1 '{hw1_sound}' yet (add it to mapping/data/sounds.json); "
+                     "its PlaySound is kept as a plain ScriptLink")
+            return [Script("ScriptLink", sid, x, y)]
+        params = [Param("string", "Sound", event)]
+        if _val(p, "loop", False):
+            params.append(Param("bool", "Looping", True))
+        return [Script("PlaySound", sid, x, y, label=event.rsplit("/", 1)[-1], params=params)]
 
     if t == "AreaTrigger":
         types = int(_val(p, "types", 1))

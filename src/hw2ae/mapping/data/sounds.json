@@ -1,0 +1,4 @@
+{
+  "_doc": "HW1 sound (bank file:name, as a PlaySound node names it) -> AE FMOD event. Taken from the events AE's own levels use for the same moment; a sound missing here keeps its PlaySound as a plain ScriptLink and is reported.",
+  "sound/misc.xml:info_teleport_activate": "event:/SFX/Effects/other/teleport"
+}

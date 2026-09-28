@@ -33,8 +33,9 @@ def cmd_convert(args) -> int:
     out = Path(args.out) if args.out else root / "editor" / name_id
     print(f"Source : {src}")
     print(f"Output : {out}")
+    hw1_assets = config.find_hw1_assets(args.hw1_assets)
     report = convert(Options(source=src, out=out, ae_assets=assets, name=args.name, name_id=name_id,
-                             lighting=args.lighting))
+                             lighting=args.lighting, hw1_assets=hw1_assets))
 
     print()
     print(f"Converted {report.levels} level(s): {report.units} units, {report.scripts} scripts.")
@@ -46,6 +47,10 @@ def cmd_convert(args) -> int:
         print("\nTilesets with no AE equivalent yet (floor left empty):")
         for t, n in report.unmapped_tilesets.most_common():
             print(f"  {n:6d} tiles  {t}")
+    if report.ported:
+        print(f"\nPorted from HW1 art (no AE equivalent to map to; files under hw1/{name_id}/):")
+        for t, n in report.ported.most_common():
+            print(f"  {n:6d}  {t}")
     if report.dropped:
         print("\nLeft out on purpose:")
         for t, n in report.dropped.most_common():
@@ -68,7 +73,13 @@ def cmd_convert(args) -> int:
 
 
 def _pack(root: Path, folder: Path) -> int:
+    from .hw1port import normalize_materials
     from .pack import pack
+    # Units from any tool (older HW2A000FF, the original C# one, hand-copied)
+    # point at HoH's system/hammerwatch.mats, which AE doesn't ship.
+    fixed = normalize_materials(folder)
+    if fixed:
+        print(f"Pointed {fixed} unit/tileset file(s) at AE's system/default.mats.")
     try:
         h1c = pack(root, folder)
     except RuntimeError as e:
@@ -122,6 +133,10 @@ def cmd_doctor(args) -> int:
     print(f"AE assets  : {assets or 'NOT FOUND'}")
     if assets:
         print(f"             {len(AssetIndex(assets))} files indexed")
+    from .hw1port import AVAILABLE, INSTALL_HINT
+    hw1 = config.find_hw1_assets(args.hw1_assets)
+    print(f"HW1 assets : {hw1 or 'NOT FOUND (stock HW1 art AE lacks is not ported; run HW1 ResourceExtractor.exe)'}")
+    print(f"HW2A000FF  : {'installed' if AVAILABLE else 'NOT INSTALLED (' + INSTALL_HINT + ')'}")
     return 0 if root and assets else 1
 
 
@@ -143,6 +158,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--lighting", choices=("hw1", "theme"), default="hw1",
                    help="hw1: keep the mission's brightness (default); theme: AE's darker theme lighting")
     p.add_argument("--no-pack", action="store_true", help="only write the folder; don't build scenarios/<id>.h1c")
+    p.add_argument("--hw1-assets", help="HW1 stock assets as loose files, for porting art AE lacks "
+                   "(default: <Hammerwatch>/editor/assetsExtract)")
     common(p)
     p.set_defaults(fn=cmd_convert)
 
@@ -171,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=cmd_learn)
 
     p = sub.add_parser("doctor", help="show which installs were found")
+    p.add_argument("--hw1-assets", help="HW1 stock assets as loose files")
     common(p)
     p.set_defaults(fn=cmd_doctor)
 
