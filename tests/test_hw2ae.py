@@ -242,6 +242,14 @@ def test_minibosses_are_mapped():
     assert r.resolve("actors/lich_1_mb.xml").path == "actors/undead/skeletons/hammerwatch/skeleton_wizard.unit"
 
 
+def test_blue_and_gold_ticks_stay_apart():
+    # tick_1_elite (spiky blue) and tick_2 (gold) share 70 HP with AE's tick_gold.
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    assert r.resolve("actors/tick_1_elite.xml").path == "actors/beasts/ticks/tick_elite.unit"
+    assert r.resolve("actors/tick_2.xml").path == "actors/beasts/ticks/tick_gold.unit"
+    assert r.resolve("actors/tick_2_small.xml").path == "actors/beasts/ticks/tick_gold_small.unit"
+
+
 # -- materials and ported HW1 art -----------------------------------------------
 
 def test_normalize_materials_fixes_units_from_any_tool(tmp_path):
