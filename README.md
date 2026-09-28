@@ -33,6 +33,7 @@ scenario thumbnail).
 
 ```
 pip install -e .[preview,test]     # or just run it with  python -m hw2ae  from src/
+pip install -e .[port]             # optional: port HW1 art AE has no counterpart for (below)
 ```
 
 The Hammerwatch Anniversary Edition install and its `unpacked_assets_*` folder are found
@@ -86,6 +87,18 @@ correspondences and pixel offsets.
   `LevelExit`, `GameEnd` → `AnnounceText` + `ShowGameOver` (credits). Shapes become
   `:Physics_Rectangle` / `:Physics_Circle` areas. `RespawnPlayers` has no AE world script and
   is dropped; an unknown node is kept as a `ScriptLink` so its links still fire, and reported.
+  `AllPlayersAreaTrigger` (teleporter pads) fires its targets through AE's `OnAllEntered`;
+  a `LevelExitArea` with no shape becomes a lone `LevelExit` the pad executes; `PlaySound`
+  takes the AE FMOD event listed in `sounds.json`.
+- **Ported HW1 art.** Doodads and tilesets that map to nothing AE ships (a mission's own
+  custom doodads, water, the castle/desert themes, many props) are converted from their HW1
+  XML/PNG with [HW2A000FF](https://github.com/bennpham/HW2A000FF-AllPlatform-Remake) and
+  shipped inside the scenario under `hw1/<id>/`, keeping the HW1 look. Custom files come from
+  the mission folder, stock ones from HW1's extracted assets (`Hammerwatch/editor/assetsExtract`,
+  written by HW1's `ResourceExtractor.exe`; override with `--hw1-assets`). Items and actors are
+  never ported: their gameplay parameters differ between the engines. Any unit or tileset in
+  the scenario pointing at Heroes of Hammerwatch's `system/hammerwatch.mats` (from any tool) is
+  rewritten to AE's `system/default.mats` when packing, and `validate` flags leftovers.
 - **Lighting.** AE's themed environments are dark and expect many light sources. A HW1 level
   with a bright ambient (the generator's are fully lit) gets AE's neutral lighting;
   `--lighting theme` uses the moody theme environments instead.
@@ -114,8 +127,9 @@ new; the converter lists everything it couldn't map with counts.
 
 - Complete for the random dungeon generator's classic themes (`a`–`d`): every asset it
   places, all its script nodes, shops and exits.
-- Castle themes `e`–`g`, the desert themes `h`/`i`, HW1 light entries and prefabs are not
-  mapped yet; they are reported, never guessed. `learn` against Temple of the Sun
+- Castle themes `e`–`g` and the desert themes `h`/`i` have no AE mapping yet: with the `port`
+  extra they are ported as HW1 art, otherwise reported. HW1 light entries and prefabs are not
+  converted yet; they are reported, never guessed. `learn` against Temple of the Sun
   (`PACKAGER.exe -u scenarios/sun_temple.h1c -d <dir>` next to `Hammerwatch/editor/campaign2`)
   is the way to extend it.
 - Verified by: the unit tests, `validate` (every path resolves in AE), and rendered previews.

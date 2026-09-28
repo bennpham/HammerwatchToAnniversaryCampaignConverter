@@ -16,6 +16,7 @@ from .ae.scripts import ScriptContext, convert_scripts
 from .ae.tiles import TileLayers
 from .hw1 import campaign as hw1_campaign
 from .hw1 import level as hw1_level
+from .hw1port import Porter, make_porter, normalize_materials
 from .mapping.resolver import Dropped, Placement, Resolver
 
 TILE = 16
@@ -43,6 +44,7 @@ class Report:
     unmapped: collections.Counter = field(default_factory=collections.Counter)
     unmapped_tilesets: collections.Counter = field(default_factory=collections.Counter)
     dropped: collections.Counter = field(default_factory=collections.Counter)
+    ported: collections.Counter = field(default_factory=collections.Counter)
     warnings: list[str] = field(default_factory=list)
 
     def warn(self, msg: str) -> None:
@@ -58,6 +60,7 @@ class Options:
     name: str | None = None
     name_id: str | None = None
     lighting: str = "hw1"  # "hw1": keep HW1's brightness; "theme": AE's theme environments
+    hw1_assets: Path | None = None  # stock HW1 assets as loose files, for porting art AE lacks
     log: object = print
 
 
@@ -91,7 +94,7 @@ def _environment(lv: hw1_level.Level, theme: str | None, resolver: Resolver, lig
 
 
 def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, report: Report,
-                  level_path_for, lighting: str = "hw1") -> Level:
+                  level_path_for, lighting: str = "hw1", porter: Porter | None = None) -> Level:
     theme = _dominant_theme(lv, resolver)
     out = Level(game_mode="DungeonGameMode", environment=_environment(lv, theme, resolver, lighting))
     if lv.lights:
@@ -99,13 +102,19 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
                     "the level uses AE's theme lighting instead")
 
     # -- tiles -------------------------------------------------------------
-    tl = TileLayers(ae_assets)
+    tl = TileLayers(ae_assets, porter.scenario_dir if porter else None)
     for hw1_ts, layer in lv.layers.items():
         targets = resolver.tileset(hw1_ts)
-        if not targets:
-            report.unmapped_tilesets[hw1_ts] += len(layer.tiles)
-            continue
         tiles16 = set(layer.tiles)
+        if not targets:
+            ported = porter.port_tileset(hw1_ts) if porter else None
+            if ported is None:
+                report.unmapped_tilesets[hw1_ts] += len(layer.tiles)
+            else:
+                # HW1 art carries HW1's own borders, drawn the way HW1 drew them: no growth.
+                tl.paint16(ported, tiles16)
+                report.ported[f"{hw1_ts} (tiles)"] += len(layer.tiles)
+            continue
         for i, ts in enumerate(targets):
             grow = BOTTOM_LAYER_GROW if i == 0 and ts not in resolver.overlay_tilesets else None
             tl.paint16(ts, tiles16, grow)
@@ -118,8 +127,13 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
     for o in lv.all_objects():
         r = resolver.resolve(o.type)
         if r is None:
-            report.unmapped[o.type] += 1
-            continue
+            ported = porter.port_unit(o.type) if porter else None
+            if ported is None:
+                report.unmapped[o.type] += 1
+                continue
+            # A ported unit keeps HW1's sprite origin: no offset.
+            r = Placement("unit", ported)
+            report.ported[o.type] += 1
         if isinstance(r, Dropped):
             report.dropped[f"{o.type} ({r.reason})"] += 1
             continue
@@ -204,13 +218,18 @@ def convert(opts: Options) -> Report:
     def level_path_for(level_id: str) -> str | None:
         return paths.get(level_id)
 
+    porter = make_porter(camp.root, opts.hw1_assets, opts.out, name_id, report.warn)
+    if porter is not None:
+        # Ours alone, and rebuilt every run: a stale texture would otherwise stay.
+        shutil.rmtree(porter.out_dir, ignore_errors=True)
+
     for entry in camp.levels:
         src = camp.root / entry.res
         if not src.exists():
             report.warn(f"level '{entry.id}' file is missing: {src}")
             continue
         lv = hw1_level.load(src)
-        ae_level = convert_level(lv, resolver, opts.ae_assets, report, level_path_for, opts.lighting)
+        ae_level = convert_level(lv, resolver, opts.ae_assets, report, level_path_for, opts.lighting, porter)
         dst = opts.out / paths[entry.id]
         level_writer.write(ae_level, dst)
         report.levels += 1
@@ -220,6 +239,9 @@ def convert(opts: Options) -> Report:
     if camp.lives is not None and camp.lives != AE_LIVES:
         hint = " (tick the 'No lives' modifier for 0)" if camp.lives == 0 else ""
         report.warn(f"the HW1 mission sets {camp.lives} lives; AE always starts with {AE_LIVES}{hint}")
+
+    if porter is not None:
+        normalize_materials(porter.out_dir)  # older HW2A000FF builds write HoH's materials file
 
     start = paths.get(camp.start) or (next(iter(paths.values())) if paths else "")
     desc = camp.description or f"Converted from the Hammerwatch mission '{camp.name}'."

@@ -192,6 +192,72 @@ def test_scripts_exit_shop_and_game_end():
     assert ud.connections == [(ann.id, 250)] and ann.connections == [(end.id, 3000)]
 
 
+def test_teleporter_pad_fires_sound_and_exit():
+    # dungeon1500735902's lobby: everyone on the pad -> sound + exit to level 0.
+    lv = hw1_level.load(Path(__file__).parent / "fixtures" / "teleporter.xml")
+    out = Level("DungeonGameMode", None)
+    ctx = ScriptContext(out, {}, lambda i: f"levels/test/level{i}.lvl", warn=lambda m: None)
+    convert_scripts(lv.scripts, ctx)
+    by_cls = {s.cls: s for s in out.scripts}
+    assert set(by_cls) == {"AllPlayersAreaTrigger", "LevelExit", "PlaySound"}  # no AreaTrigger for a shapeless exit
+    pad, exit_, sound = by_cls["AllPlayersAreaTrigger"], by_cls["LevelExit"], by_cls["PlaySound"]
+    rect, = [u for u in out.units if u.path == ":Physics_Rectangle"]
+    assert Param("ids", "Areas", [rect.id]) in pad.params
+    # AE fires these through OnAllEntered, not ordinary links.
+    assert Param("ids", "OnAllEntered", [sound.id, exit_.id]) in pad.params and pad.connections == []
+    assert Param("string", "Sound", "event:/SFX/Effects/other/teleport") in sound.params
+    assert Param("string", "Level", "levels/test/level0.lvl") in exit_.params
+
+
+# -- materials and ported HW1 art -----------------------------------------------
+
+def test_normalize_materials_fixes_units_from_any_tool(tmp_path):
+    from hw2ae.hw1port import hwr_materials_refs, normalize_materials
+    unit = tmp_path / "hw1" / "x" / "a.unit"
+    unit.parent.mkdir(parents=True)
+    # The original C# tool (no prefix) and HW2A000FF with a prefix.
+    unit.write_text('<sprite texture="a.png" material="system/hammerwatch.mats:wall">\n'
+                    '<sprite texture="b.png" material="hw1/x/system/hammerwatch.mats:glow">\n')
+    (tmp_path / "hw1" / "x" / "t.tileset").write_text('<tileset material="system/default.mats:floor"/>')
+    assert normalize_materials(tmp_path) == 1
+    text = unit.read_text()
+    assert hwr_materials_refs(text) == 0
+    assert 'material="system/default.mats:wall"' in text and 'material="system/default.mats:glow"' in text
+
+
+def _png(path: Path) -> None:
+    """A 1x1 RGBA PNG, without needing Pillow."""
+    import struct
+    import zlib
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+                     + chunk(b"IDAT", zlib.compress(b"\x00\xff\x00\x00\xff")) + chunk(b"IEND", b""))
+
+
+def test_porter_ships_custom_doodads_inside_the_scenario(tmp_path):
+    from hw2ae import hw1port
+    if not hw1port.AVAILABLE:
+        pytest.skip("HW2A000FF is not installed")
+    import shutil
+    mission = tmp_path / "mission"
+    shutil.copytree(Path(__file__).parent / "fixtures" / "custom_art", mission)
+    _png(mission / "doodads" / "level1" / "c_blood.png")
+    scenario = tmp_path / "scenario"
+    warnings: list[str] = []
+    porter = hw1port.Porter(mission, None, scenario, "my_dungeon", warnings.append)
+
+    ae_path = porter.port_unit("doodads/level1/c_h_16.xml")
+    assert ae_path == "hw1/my_dungeon/doodads/level1/c_h_16.unit"
+    text = (scenario / ae_path).read_text()
+    assert 'texture="hw1/my_dungeon/doodads/level1/c_blood.png"' in text
+    assert "system/default.mats:" in text and "hammerwatch.mats" not in text
+    assert (scenario / "hw1/my_dungeon/doodads/level1/c_blood.png").is_file()
+    assert porter.port_unit("items/not_here.xml") is None
+
+
 # -- doors -----------------------------------------------------------------
 
 def _door_obj(i, name, x, y):

@@ -11,6 +11,9 @@ import string
 from pathlib import Path
 
 AE_DIR = "Hammerwatch Anniversary Edition"
+HW1_DIR = "Hammerwatch"
+# Where HW1's ResourceExtractor.exe unpacks the stock assets (assets.bin).
+HW1_EXTRACTED = r"editor\assetsExtract"
 STEAM_SUBDIRS = [
     r"Program Files (x86)\Steam\steamapps\common",
     r"Program Files\Steam\steamapps\common",
@@ -37,6 +40,21 @@ def find_ae_root(explicit: str | None = None) -> Path | None:
     for c in _candidates(AE_DIR):
         if c.is_dir():
             return c
+    return None
+
+
+def find_hw1_assets(explicit: str | None = None) -> Path | None:
+    """HW1's stock assets as loose files, for porting art AE never remade.
+
+    HW1 ships them packed in ``assets.bin``; its ``ResourceExtractor.exe``
+    writes them to ``editor/assetsExtract``."""
+    for p in [explicit, os.environ.get("HW2AE_HW1_ASSETS")]:
+        if p and Path(p).is_dir():
+            return Path(p)
+    for c in _candidates(HW1_DIR):
+        d = c / HW1_EXTRACTED
+        if d.is_dir():
+            return d
     return None
 
 

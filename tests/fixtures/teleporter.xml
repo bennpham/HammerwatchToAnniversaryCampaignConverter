@@ -1,0 +1,59 @@
+<dictionary>
+<dictionary name="scripting">
+		<array name="nodes">
+			<dictionary>
+				<int name="id">228</int>
+				<string name="type">RectangleShape</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">7 0</vec2>
+				<dictionary name="parameters">
+					<float name="w">3</float>
+					<float name="h">3</float>
+					<int name="types">15</int>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">231</int>
+				<string name="type">AllPlayersAreaTrigger</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">14.5 1.25</vec2>
+				<dictionary name="parameters">
+					<dictionary name="shape">
+						<int-arr name="static">228</int-arr>
+					</dictionary>
+					<string name="msg">Waiting all players...</string>
+				</dictionary>
+				<int-arr name="connections">229 232</int-arr>
+				<int-arr name="connection-delays">0 0</int-arr>
+			</dictionary>
+			<dictionary>
+				<int name="id">232</int>
+				<string name="type">LevelExitArea</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">14 -2</vec2>
+				<dictionary name="parameters">
+					<string name="level">0</string>
+					<int name="start id">0</int>
+					<dictionary name="shape">
+					</dictionary>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">229</int>
+				<string name="type">PlaySound</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">16.75 1.25</vec2>
+				<dictionary name="parameters">
+					<string name="sound">sound/misc.xml:info_teleport_activate</string>
+					<bool name="loop">False</bool>
+					<bool name="play3d">True</bool>
+					<float name="range3d">5</float>
+				</dictionary>
+			</dictionary>
+		</array>
+</dictionary>
+</dictionary>

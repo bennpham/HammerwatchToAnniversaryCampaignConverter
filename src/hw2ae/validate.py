@@ -12,6 +12,7 @@ from pathlib import Path
 from .ae import level_reader
 from .ae.assets import AssetIndex
 from .ae.tiles import CELL
+from .hw1port import hwr_materials_refs
 
 
 @dataclass
@@ -36,6 +37,14 @@ def validate(scenario_dir: Path, assets: AssetIndex) -> tuple[Problems, int]:
 
     if not (scenario_dir / "info.xml").exists():
         problems.add("info.xml is missing")
+
+    # Units shipped in the scenario (ported HW1 art, or added by hand) must use
+    # AE's materials; HoH's system/hammerwatch.mats isn't in AE.
+    for f in sorted(scenario_dir.rglob("*")):
+        if f.suffix.lower() in (".unit", ".tileset") and f.is_file():
+            if hwr_materials_refs(f.read_text(encoding="utf-8", errors="replace")):
+                problems.add(f"{f.relative_to(scenario_dir).as_posix()}: uses system/hammerwatch.mats, "
+                             "which AE doesn't ship (packing rewrites it to system/default.mats)")
 
     loaded = {f.relative_to(scenario_dir).as_posix().lower(): level_reader.load(f) for f in levels}
     start_ids = {rel: {_start_id(s) for s in lv.scripts if s.cls == "LevelStart"}
@@ -72,7 +81,7 @@ def validate(scenario_dir: Path, assets: AssetIndex) -> tuple[Problems, int]:
                     problems.add(f"{rel}: {s.cls} #{s.id} links to missing script #{t}")
             if s.params is not None:
                 for arr in s.params:
-                    if arr.tag == "array" and arr.name in ("Areas", "Units", "Scripts", "Doors"):
+                    if arr.tag == "array" and arr.name in ("Areas", "Units", "Scripts", "Doors", "OnAllEntered", "OnCanceled"):
                         for c in arr:
                             if c.tag == "int" and c.value not in unit_ids | script_ids:
                                 problems.add(f"{rel}: {s.cls} #{s.id} {arr.name} refers to missing #{c.value}")
