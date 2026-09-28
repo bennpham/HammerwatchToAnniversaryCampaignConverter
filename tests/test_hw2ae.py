@@ -70,14 +70,19 @@ def test_rle_roundtrip_random():
         assert tiles.decode_rle(tiles.encode_rle(grid), side) == grid
 
 
-def test_cells_are_centred():
+def test_cells_are_centred_on_the_512_grid():
+    # AE centres cells on multiples of 512 (cell 0 covers -256..256) and
+    # floors any other pos onto that grid, so an off-grid cell would shift.
     tl = tiles.TileLayers(Path("does-not-exist"))
-    tl.paint16("tilesets/x.tileset", {(0, 0), (31, 31)})
+    tl.paint16("tilesets/x.tileset", {(0, 0), (15, 15), (16, 0), (-17, -1)})
     cells = tl.cells()
-    assert list(cells) == [(256, 256)]
-    (ts, rle), = cells[(256, 256)]
-    rects = list(tiles.decode_cell((256, 256), ts, rle, 16))
-    assert (0, 0, 16) in rects and (496, 496, 16) in rects
+    assert set(cells) == {(0, 0), (512, 0), (-512, 0)}
+    rects = set()
+    for pos, datasets in cells.items():
+        assert pos[0] % 512 == 0 and pos[1] % 512 == 0
+        for ts, rle in datasets:
+            rects |= set(tiles.decode_cell(pos, ts, rle, 16))
+    assert rects == {(0, 0, 16), (240, 240, 16), (256, 0, 16), (-272, -16, 16)}
 
 
 # -- HW1 reading -----------------------------------------------------------
@@ -144,6 +149,10 @@ def test_scripts_exit_shop_and_game_end():
     exit_ = next(s for s in out.scripts if s.cls == "LevelExit")
     assert trig.connections == [(exit_.id, 0)]
     assert Param("string", "Level", "levels/test/level1.lvl") in exit_.params
+    # HW1 start id 0 is AE's default spawn: no StartID at all, on both ends.
+    start = next(s for s in out.scripts if s.cls == "LevelStart")
+    assert start.params == [] and start.label == "default spawn"
+    assert not any(p.name == "StartID" for p in exit_.params)
     rects = [u for u in out.units if u.path == ":Physics_Rectangle"]
     assert len(rects) == 1 and rects[0].state["size"] == ("vec2", (32.0, 16.0))
     areas = next(p for p in trig.params if p.name == "Areas")
@@ -164,8 +173,8 @@ def test_level_writer_roundtrip(tmp_path):
     lv = Level("DungeonGameMode", "effects/lighting/bonus.env")
     lv.units.append(Unit("doodads/generic/lamps/torch.unit", 8, 16, 1, {"start": ("string", "n-off")}))
     lv.units.append(Unit("doodads/generic/lamps/torch.unit", 40, 16, 2))
-    lv.scripts.append(Script("LevelStart", 3, 0, 0, params=[Param("string", "StartID", "0")]))
-    lv.tile_cells = {(256, 256): [("tilesets/prison_dirt.tileset", "7e7e04")]}
+    lv.scripts.append(Script("LevelStart", 3, 0, 0, params=[Param("string", "StartID", "north")]))
+    lv.tile_cells = {(0, 0): [("tilesets/prison_dirt.tileset", "7e7e04")]}
     path = tmp_path / "x.lvl"
     level_writer.write(lv, path)
     back = level_reader.load(path)
@@ -189,6 +198,7 @@ def test_convert_fixture_against_ae(tmp_path):
     report = convert(Options(source=FIX, out=tmp_path / "test_dungeon", ae_assets=AE_ASSETS, log=lambda *a: None))
     assert report.levels == 2
     assert report.unmapped == {"items/some_unknown_item.xml": 1}
+    assert any("sets 0 lives" in w for w in report.warnings)
     problems, n = validate(tmp_path / "test_dungeon", AssetIndex(AE_ASSETS))
     assert n == 2 and not problems, problems.items
     lvl0 = level_reader.load(tmp_path / "test_dungeon" / "levels" / "test_dungeon" / "level0.lvl")

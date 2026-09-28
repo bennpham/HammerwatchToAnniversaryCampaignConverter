@@ -91,7 +91,12 @@ new; the converter lists everything it couldn't map with counts.
 ### AE file-format notes
 
 - `.lvl` is SVAL text: `game-mode`, `version`, `lighting`, `tiles`, `units`, `scripts`, `prefabs`.
-- A tile cell's `pos` is its **centre**; it covers `pos ± 256` px.
+- A tile cell's `pos` is its **centre**; it covers `pos ± 256` px and is always a multiple of
+  512 (AE floors any other `pos` onto that grid, shifting the floor by up to 511 px).
+- A new game spawns at the `LevelStart` with no `StartID` param (AE's "default spawn"); HW1's
+  start id `0` maps to that, and a `LevelExit` without `StartID` leads to it.
+- Starting lives are fixed at 2 in AE; only the `NO_LIVES` / `DOUBLE_LIVES` / `INFINITE_LIVES`
+  modifiers change them, so a HW1 `<lives>` value is reported, not converted.
 - `data-rle` is a row-major presence grid of `(512 / tileset size)²` tiles stored as **signed
   byte runs**: `n > 0` painted, `n < 0` empty, capped at ±126.
 - A script entry is `[class, id, vec3 pos, enabled, trigger-times, execute-on-start,

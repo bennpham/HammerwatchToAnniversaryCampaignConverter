@@ -1,7 +1,8 @@
 """AE tile layers.
 
 A level's floor is a list of 512-px cells. A cell's ``pos`` is its *centre*,
-so it covers ``pos - 256 .. pos + 256``. Each cell holds one dataset per
+so it covers ``pos - 256 .. pos + 256``, and is always a multiple of 512: AE
+floors any other ``pos`` onto that grid, which shifts the whole cell. Each cell holds one dataset per
 tileset, and each dataset is a presence grid of ``512 / size`` × ``512 / size``
 tiles (``size`` comes from the tileset file). AE picks tile variants and
 borders on its own, so the grid only says where the tileset is painted.
@@ -102,15 +103,18 @@ class TileLayers:
         for ts in self.order:
             s = self.size(ts)
             side = CELL // s
+            half = CELL // 2
             by_cell: dict[tuple[int, int], set[tuple[int, int]]] = {}
             for tx, ty in self.layers[ts]:
-                cx, cy = (tx * s) // CELL, (ty * s) // CELL
-                by_cell.setdefault((cx, cy), set()).add((tx - cx * side, ty - cy * side))
+                # Cell (cx, cy) is centred on (cx*512, cy*512).
+                cx, cy = (tx * s + half) // CELL, (ty * s + half) // CELL
+                x0, y0 = (cx * CELL - half) // s, (cy * CELL - half) // s
+                by_cell.setdefault((cx, cy), set()).add((tx - x0, ty - y0))
             for (cx, cy), local in sorted(by_cell.items()):
                 grid = [False] * (side * side)
                 for lx, ly in local:
                     grid[ly * side + lx] = True
-                centre = (cx * CELL + CELL // 2, cy * CELL + CELL // 2)
+                centre = (cx * CELL, cy * CELL)
                 out.setdefault(centre, []).append((ts, encode_rle(grid)))
         return out
 

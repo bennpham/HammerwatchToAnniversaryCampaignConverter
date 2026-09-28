@@ -57,6 +57,15 @@ def _val(params: sval.Node | None, name: str, default=None):
     return default if n is None or n.children else n.value
 
 
+def _start_id(v) -> str | None:
+    """HW1 start id -> AE ``StartID``; ``None`` for HW1's default start (0).
+
+    A new AE game spawns at the ``LevelStart`` whose ``StartID`` is empty, and
+    AE's own levels leave the param out for that one. HW1's default is id 0."""
+    s = str(v if v is not None else "").strip()
+    return None if s in ("", "0") else s
+
+
 @dataclass
 class ScriptContext:
     level: Level
@@ -162,7 +171,10 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
     t = n.type
 
     if t == "LevelStart":
-        return [Script("LevelStart", sid, x, y, params=[Param("string", "StartID", str(_val(p, "id", 0)))])]
+        start_id = _start_id(_val(p, "id", 0))
+        if start_id is None:
+            return [Script("LevelStart", sid, x, y, label="default spawn")]
+        return [Script("LevelStart", sid, x, y, params=[Param("string", "StartID", start_id)])]
 
     if t == "LevelExitArea":
         trig = Script("AreaTrigger", sid, x, y, params=[
@@ -175,10 +187,11 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
         if lvl is None:
             ctx.warn(f"level exit points at unknown level id '{target}'")
             lvl = ""
-        exit_ = Script("LevelExit", ctx.level.new_id(), x + 16, y, label=lvl, params=[
-            Param("string", "Level", lvl),
-            Param("string", "StartID", str(_val(p, "start id", 0))),
-        ])
+        exit_ = Script("LevelExit", ctx.level.new_id(), x + 16, y, label=lvl,
+                       params=[Param("string", "Level", lvl)])
+        start_id = _start_id(_val(p, "start id", 0))
+        if start_id is not None:
+            exit_.params.append(Param("string", "StartID", start_id))
         trig.connections.append((exit_.id, 0))
         return [trig, exit_]
 

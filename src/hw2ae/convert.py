@@ -24,6 +24,9 @@ DEFAULT_ENV = "effects/lighting/prison_1.env"
 BRIGHT_ENV = "effects/lighting/bonus.env"
 BRIGHT_AMBIENT = 128
 EXIT_WIDTH = 64
+# AE hard-codes the party's starting lives (PartyRecord.as); only the
+# NO_LIVES / DOUBLE_LIVES / INFINITE_LIVES modifiers change them.
+AE_LIVES = 2
 
 
 @dataclass
@@ -202,6 +205,10 @@ def convert(opts: Options) -> Report:
         report.levels += 1
         log(f"  {entry.res} -> {paths[entry.id]}  ({len(ae_level.units)} units, "
             f"{len(ae_level.scripts)} scripts, {len(ae_level.tile_cells)} tile cells)")
+
+    if camp.lives is not None and camp.lives != AE_LIVES:
+        hint = " (tick the 'No lives' modifier for 0)" if camp.lives == 0 else ""
+        report.warn(f"the HW1 mission sets {camp.lives} lives; AE always starts with {AE_LIVES}{hint}")
 
     start = paths.get(camp.start) or (next(iter(paths.values())) if paths else "")
     desc = camp.description or f"Converted from the Hammerwatch mission '{camp.name}'."
