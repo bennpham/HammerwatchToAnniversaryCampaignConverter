@@ -63,8 +63,21 @@ class Placement:
     dx: float = 0.0
     dy: float = 0.0
     params: dict = field(default_factory=dict)
-    replaces_script: str | None = None
     is_exit: bool = False
+    door: DoorPiece | None = None
+
+
+@dataclass(frozen=True)
+class DoorPiece:
+    """A HW1 door piece. AE doors are rebuilt per door, not per piece, so the
+    converter needs what the piece belongs to rather than an AE unit for it."""
+    orient: str   # "h" or "v"
+    metal: str    # bronze, silver, gold
+    theme: str    # AE door theme (prison, armory, ...)
+    piece: str    # HW1 piece: "", "v2", "cap_l", "cap_r", "cap_up", "cap_dn"
+
+    def ae_path(self, part: str) -> str:
+        return f"doodads/doors/door_{self.orient}_{part}_{self.metal}_{self.theme}.unit"
 
 
 @dataclass
@@ -97,8 +110,7 @@ class Resolver:
             if "drop" in entry:
                 return Dropped(entry["drop"])
             if "prefab" in entry:
-                return self._checked(Placement("prefab", entry["prefab"], entry.get("dx", 0), entry.get("dy", 0),
-                                               replaces_script=entry.get("replaces_script")))
+                return self._checked(Placement("prefab", entry["prefab"], entry.get("dx", 0), entry.get("dy", 0)))
             return self._checked(Placement("unit", entry["ae"], entry.get("dx", 0), entry.get("dy", 0),
                                            dict(entry.get("params", {}))))
 
@@ -139,17 +151,15 @@ class Resolver:
         theme = self.themes.get(letter)
         if theme is None:
             return None
-        part = "mid"
-        if "cap_l" in rest:
-            part = "cap_l"
-        elif "cap_r" in rest:
-            part = "cap_r"
-        elif "cap_up" in rest:
-            part = "cap_u"
-        elif "cap_dn" in rest:
-            part = "cap_d"
-        path = f"doodads/doors/door_{orient}_{part}_{metal}_{theme['doors']}.unit"
-        return self._checked(Placement("unit", path))
+        # ``door_a_bronze_v2`` and ``door_a_bronze_h_v2`` are both the short piece.
+        piece = next((p for p in ("cap_l", "cap_r", "cap_up", "cap_dn") if p in rest),
+                     "v2" if rest.endswith("2") else "")
+        door = DoorPiece(orient, metal, theme["doors"], piece)
+        # The mid piece stands for the whole door when checking it exists.
+        pl = self._checked(Placement("unit", door.ae_path("mid")))
+        if pl is not None:
+            pl.door = door
+        return pl
 
     # -- tiles -----------------------------------------------------------
     def tileset(self, hw1_tileset: str) -> list[str] | None:

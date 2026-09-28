@@ -83,9 +83,9 @@
   "doodads/generic/vgt_ivy_1.xml": {"ae": "doodads/terrain/vgt_ivy.unit"},
   "doodads/generic/vgt_ivy_2.xml": {"ae": "doodads/terrain/vgt_ivy.unit"},
 
-  "doodads/special/vendor_defense.xml": {"prefab": "prefabs/shop_defense.pfb", "dx": 0, "dy": 4, "replaces_script": "ShopArea"},
-  "doodads/special/vendor_offense.xml": {"prefab": "prefabs/shop_offense.pfb", "dx": 0, "dy": 4, "replaces_script": "ShopArea"},
-  "doodads/special/vendor_combo.xml": {"prefab": "prefabs/shop_combo.pfb", "dx": 0, "dy": 4, "replaces_script": "ShopArea"},
-  "doodads/special/vendor_misc.xml": {"prefab": "prefabs/shop_health.pfb", "dx": 0, "dy": 4, "replaces_script": "ShopArea"},
-  "doodads/special/vendor_power.xml": {"prefab": "prefabs/shop_potion.pfb", "dx": 0, "dy": 4, "replaces_script": "ShopArea"}
+  "doodads/special/vendor_defense.xml": {"ae": "doodads/generic/shop_defense.unit", "dy": 4},
+  "doodads/special/vendor_offense.xml": {"ae": "doodads/generic/shop_offense.unit", "dy": 4},
+  "doodads/special/vendor_combo.xml": {"ae": "doodads/generic/shop_combo.unit", "dy": 4},
+  "doodads/special/vendor_misc.xml": {"ae": "doodads/generic/shop_health.unit", "dy": 4},
+  "doodads/special/vendor_power.xml": {"ae": "doodads/generic/shop_potion.unit", "dy": 4}
 }

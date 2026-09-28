@@ -45,6 +45,13 @@ def _write_param(w: Writer, p: Param) -> None:
         for i in p.value:  # type: ignore[union-attr]
             w.int(i)
         w.close("array")
+    elif p.kind == "target":
+        # A script feed from another script's event: [script id, event name].
+        sid, event = p.value  # type: ignore[misc]
+        w.open("array", p.name)
+        w.int(sid)
+        w.string(event)
+        w.close("array")
     elif p.kind == "bool":
         w.bool(bool(p.value), p.name)
     elif p.kind == "int":

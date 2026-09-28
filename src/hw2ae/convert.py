@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import collections
+import dataclasses
 import shutil
 import time
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
-from .ae import level_writer, scenario
+from .ae import doors, level_writer, scenario
 from .ae.assets import AssetIndex
 from .ae.model import Level, PrefabPlacement, Unit
 from .ae.scripts import ScriptContext, convert_scripts
@@ -106,8 +107,8 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
 
     # -- units and prefabs -------------------------------------------------
     id_map: dict[int, int] = {}
-    shop_cats: set[str] = set()
     exits: list[Unit] = []
+    door_pieces = []
     for o in lv.all_objects():
         r = resolver.resolve(o.type)
         if r is None:
@@ -117,11 +118,12 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
             report.dropped[f"{o.type} ({r.reason})"] += 1
             continue
         assert isinstance(r, Placement)
+        if r.door is not None:
+            door_pieces.append((o, r.door))
+            continue
         x, y = o.x * TILE + r.dx, o.y * TILE + r.dy
         if r.kind == "prefab":
             out.prefabs.append(PrefabPlacement(r.path, x, y))
-            if r.replaces_script == "ShopArea":
-                shop_cats.add(_shop_prefix(r.path))
             continue
         uid = out.new_id()
         id_map[o.id] = uid
@@ -132,10 +134,10 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
             exits.append(u)
 
     _clear_exit_spans(out, exits)
+    doors.convert(_level_themed(door_pieces, theme, resolver), lv.doodads, out, id_map)
 
     # -- scripts -----------------------------------------------------------
-    ctx = ScriptContext(level=out, id_map=id_map, level_path_for=level_path_for,
-                        shop_categories_placed=shop_cats, warn=report.warn)
+    ctx = ScriptContext(level=out, id_map=id_map, level_path_for=level_path_for, warn=report.warn)
     convert_scripts(lv.scripts, ctx)
 
     report.units += len(out.units)
@@ -143,14 +145,17 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
     return out
 
 
-def _shop_prefix(prefab: str) -> str:
-    return {
-        "prefabs/shop_defense.pfb": "def",
-        "prefabs/shop_offense.pfb": "off",
-        "prefabs/shop_combo.pfb": "combo",
-        "prefabs/shop_health.pfb": "misc",
-        "prefabs/shop_potion.pfb": "power",
-    }.get(prefab, prefab)
+def _level_themed(pieces, theme: str | None, resolver: Resolver):
+    """HW1 reuses the prison doors (``door_a_*``) in every theme; AE's remake
+    gives each door its level's theme, so do the same when AE has that door."""
+    door_theme = resolver.themes.get(theme, {}).get("doors") if theme else None
+    if not door_theme:
+        return pieces
+    out = []
+    for o, d in pieces:
+        themed = dataclasses.replace(d, theme=door_theme)
+        out.append((o, themed if resolver.assets.exists(themed.ae_path("mid")) else d))
+    return out
 
 
 def _clear_exit_spans(level: Level, exits: list[Unit]) -> None:

@@ -72,7 +72,7 @@ def validate(scenario_dir: Path, assets: AssetIndex) -> tuple[Problems, int]:
                     problems.add(f"{rel}: {s.cls} #{s.id} links to missing script #{t}")
             if s.params is not None:
                 for arr in s.params:
-                    if arr.tag == "array" and arr.name in ("Areas", "Units", "Scripts"):
+                    if arr.tag == "array" and arr.name in ("Areas", "Units", "Scripts", "Doors"):
                         for c in arr:
                             if c.tag == "int" and c.value not in unit_ids | script_ids:
                                 problems.add(f"{rel}: {s.cls} #{s.id} {arr.name} refers to missing #{c.value}")
@@ -87,6 +87,13 @@ def validate(scenario_dir: Path, assets: AssetIndex) -> tuple[Problems, int]:
                                      "which has no such LevelStart")
         if not any(s.cls == "LevelStart" for s in lv.scripts):
             problems.add(f"{rel}: no LevelStart, players have nowhere to spawn")
+        # A door opens only through a DoorController naming its key.
+        controlled = {c.value for s in lv.scripts if s.cls == "DoorController" and s.params is not None
+                      and s.params.get("Doors") is not None for c in s.params["Doors"]}
+        orphans = sum(1 for u in lv.units
+                      if u.type.startswith("doodads/doors/door_") and u.id not in controlled)
+        if orphans:
+            problems.add(f"{rel}: {orphans} door piece(s) without a DoorController; no key can open them")
 
     # A new game spawns at the start level's LevelStart without a StartID.
     for start in _start_levels(scenario_dir):
