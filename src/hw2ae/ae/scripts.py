@@ -9,6 +9,8 @@ most nodes translate one to one. The differences handled here:
   (just the ``LevelExit`` when it has no shape and only other scripts fire it).
 * ``AllPlayersAreaTrigger`` fires through its ``OnAllEntered`` feed, not links.
 * ``PlaySound`` takes an AE FMOD event, looked up in ``mapping/data/sounds.json``.
+* ``PlayMusic`` sets AE's ``MusicMode`` (and ``AmbienceMode``) from the same file.
+* ``DestroyObject`` is ``DestroyUnits``; ``ChangeDoodadState`` is ``SetUnitScene``.
 * ``GameEnd`` is an ``AnnounceText`` followed by ``ShowGameOver`` (credits).
 * ``ShopArea`` is a ``UseTrigger`` on its area feeding an AE ``ShopArea``, the
   way Castle Hammerwatch's shops are wired. (AE's shop prefabs pick their
@@ -35,10 +37,14 @@ SHOP_ICON = 4
 # AE scripts that fire their targets through a named feed rather than links.
 FEED_LINKS = {"AllPlayersAreaTrigger": "OnAllEntered"}
 
+_SOUND_DATA = json.loads((Path(__file__).parent.parent / "mapping" / "data" / "sounds.json").read_text())
 # HW1 sound (sound bank file:name) -> AE FMOD event, as AE's own levels use them.
-SOUNDS: dict[str, str] = {k: v for k, v in json.loads(
-    (Path(__file__).parent.parent / "mapping" / "data" / "sounds.json").read_text()).items()
-    if not k.startswith("_")}
+SOUNDS: dict[str, str] = _SOUND_DATA["sounds"]
+# HW1 music track (sound/music.xml:name) -> AE MusicMode / AmbienceMode values.
+MUSIC: dict[str, int] = _SOUND_DATA["music"]
+AMBIENCE: dict[str, int] = _SOUND_DATA["ambience"]
+# Tracks AE plays as a one-shot stinger rather than a music mode.
+MUSIC_STINGERS: dict[str, str] = _SOUND_DATA["music_stingers"]
 
 # HW1 AreaTrigger ``types`` bits -> AE AreaFilter bits.
 _AREA_FILTER = {1: 2, 2: 4, 4: 8 | 16 | 32, 8: 64}
@@ -50,6 +56,12 @@ def _ids(params: sval.Node | None, name: str) -> list[int]:
     d = params.get(name)
     if d is None:
         return []
+    # The random dungeon generator writes the ids straight in, as
+    # <int-arr name="static">; the HW1 editor nests them in a dictionary.
+    if d.tag == "int-arr":
+        return list(d.value)
+    if d.tag == "int":
+        return [d.value]
     out: list[int] = []
     for c in d:
         if c.tag == "int-arr":
@@ -241,9 +253,27 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
         return [Script("ScriptLink", sid, x, y)]
 
     if t == "GlobalEventTrigger":
-        if str(_val(p, "event", "")) in ("LevelLoaded", "0"):
+        # The HW1 editor writes {event: ...}; the random dungeon generator
+        # writes the event name as the whole parameters value.
+        event = p.value if p is not None and p.tag == "string" else _val(p, "event", "")
+        if str(event) in ("LevelLoaded", "0"):
             return [Script("ScriptLink", sid, x, y, execute_on_start=True)]
         return None
+
+    if t == "DestroyObject":
+        units = _feed(ctx, _ids(p, "static") + _ids(p, "object"))
+        return [Script("DestroyUnits", sid, x, y, params=[Param("ids", "Units", units)])]
+
+    if t == "ChangeDoodadState":
+        # Ported HW1 doodads keep HW1's state names as their scene names.
+        state = str(_val(p, "state", ""))
+        return [Script("SetUnitScene", sid, x, y, label=state, params=[
+            Param("ids", "Units", _feed(ctx, _ids(p, "object"))),
+            Param("string", "State", state),
+        ])]
+
+    if t == "PlayMusic":
+        return _play_music(n, ctx, sid, x, y)
 
     if t == "ObjectEventTrigger":
         ev = str(_val(p, "event", ""))
@@ -276,3 +306,30 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
         return [use, shop]
 
     return None
+
+
+def _play_music(n: ScriptNode, ctx: ScriptContext, sid: int, x: float, y: float) -> list[Script]:
+    """AE plays one music event and picks the track with the ``MusicMode``
+    parameter (the main menu leaves it on Title). A HW1 act track becomes that
+    mode plus the act's ambience, as AE's region table pairs them."""
+    track = str(_val(n.params, "sound", ""))
+    stinger = MUSIC_STINGERS.get(track)
+    if stinger is not None:
+        return [Script("PlaySound", sid, x, y, label=stinger.rsplit("/", 1)[-1],
+                       params=[Param("string", "Sound", stinger)])]
+    mode = MUSIC.get(track)
+    if mode is None:
+        ctx.warn(f"no AE music for HW1 '{track}' yet (add it to mapping/data/sounds.json); "
+                 "its PlayMusic is kept as a plain ScriptLink")
+        return [Script("ScriptLink", sid, x, y)]
+    label = track.rsplit(":", 1)[-1]
+    music = Script("PlayMusic", sid, x, y, label=label, params=[Param("int", "Music", mode)])
+    ambience = AMBIENCE.get(track)
+    if ambience is None:
+        return [music]
+    amb = Script("PlayMusic", ctx.level.new_id(), x + 16, y, label=f"{label} ambience", params=[
+        Param("int", "Music", ambience),
+        Param("bool", "Ambience", True),
+    ])
+    music.connections.append((amb.id, 0))
+    return [music, amb]

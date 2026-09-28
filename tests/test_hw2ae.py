@@ -209,6 +209,39 @@ def test_teleporter_pad_fires_sound_and_exit():
     assert Param("string", "Level", "levels/test/level0.lvl") in exit_.params
 
 
+def test_floor_button_and_level_music():
+    # dungeon1500735902 level 7, in the random dungeon generator's dialect.
+    lv = hw1_level.load(Path(__file__).parent / "fixtures" / "button_and_music.xml")
+    out = Level("DungeonGameMode", None)
+    walls = {67: 501, 68: 502, 69: 503}
+    ctx = ScriptContext(out, {**walls, 74: 510}, lambda i: None, warn=lambda m: None)
+    convert_scripts(lv.scripts, ctx)
+    by_cls: dict[str, list] = {}
+    for s in out.scripts:
+        by_cls.setdefault(s.cls, []).append(s)
+
+    # <string name="parameters">LevelLoaded</string> starts the level's music.
+    start, = by_cls["ScriptLink"]
+    music, ambience = by_cls["PlayMusic"]
+    assert start.execute_on_start and start.connections == [(music.id, 3521)]
+    assert Param("int", "Music", 4) in music.params          # act4: chambers
+    assert Param("bool", "Ambience", True) in ambience.params and music.connections == [(ambience.id, 0)]
+
+    # The button destroys the seal wall (ids in a bare int-arr) and shows as pressed.
+    trig, = by_cls["AreaTrigger"]
+    destroy, = by_cls["DestroyUnits"]
+    scene, = by_cls["SetUnitScene"]
+    assert Param("ids", "Units", [501, 502, 503]) in destroy.params
+    assert Param("ids", "Units", [510]) in scene.params and Param("string", "State", "pressed") in scene.params
+    assert {t for t, _ in trig.connections} == {destroy.id, scene.id}
+
+
+def test_minibosses_are_mapped():
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    assert r.resolve("actors/tick_1_mb.xml").path == "actors/beasts/ticks/tick_giant.unit"
+    assert r.resolve("actors/lich_1_mb.xml").path == "actors/undead/skeletons/hammerwatch/skeleton_wizard.unit"
+
+
 # -- materials and ported HW1 art -----------------------------------------------
 
 def test_normalize_materials_fixes_units_from_any_tool(tmp_path):
