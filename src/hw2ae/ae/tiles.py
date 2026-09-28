@@ -70,11 +70,21 @@ class TileLayers:
     def size(self, tileset: str) -> int:
         return tileset_size(self.ae_assets, tileset)
 
-    def paint16(self, tileset: str, tiles16: set[tuple[int, int]]) -> None:
+    def paint16(self, tileset: str, tiles16: set[tuple[int, int]],
+                grow: tuple[int, int, int, int] | None = None) -> None:
         """Paint ``tileset`` over a set of 16-px tiles (HW1's grid, origin 0).
 
         Finer tilesets get every sub-tile; a coarser tile is painted when at
-        least half of it is covered, so floors keep their shape at 32 px."""
+        least half of it is covered, so floors keep their shape at 32 px.
+
+        ``grow`` = (left, up, right, down) widens the painted area by that many
+        16-px tiles on each side and then paints every coarse tile it touches.
+        AE paints a floor's bottom layer past the walkable floor, under the
+        walls, so the jagged borders of the layers end up hidden by wall art."""
+        if grow:
+            left, up, right, down = grow
+            tiles16 = {(x + dx, y + dy) for x, y in tiles16
+                       for dx in range(-left, right + 1) for dy in range(-up, down + 1)}
         s = self.size(tileset)
         layer = self.layers.get(tileset)
         if layer is None:
@@ -88,7 +98,7 @@ class TileLayers:
                         layer.add((tx * k + a, ty * k + b))
         else:
             k = s // 16
-            need = (k * k + 1) // 2
+            need = 1 if grow else (k * k + 1) // 2
             counts: dict[tuple[int, int], int] = {}
             for tx, ty in tiles16:
                 key = (tx // k, ty // k)

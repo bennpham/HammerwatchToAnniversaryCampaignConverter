@@ -92,8 +92,9 @@ class Resolver:
                              if not k.startswith("_")}
         self.units: dict = {k: v for k, v in json.loads((data_dir / "units.json").read_text()).items()
                             if not k.startswith("_")}
-        self.tilesets: dict = {k: v for k, v in json.loads((data_dir / "tilesets.json").read_text()).items()
-                               if not k.startswith("_")}
+        tilesets = json.loads((data_dir / "tilesets.json").read_text())
+        self.tilesets: dict = {k: v for k, v in tilesets.items() if not k.startswith("_")}
+        self.overlay_tilesets: set[str] = set(tilesets.get("_overlays", []))
         self._cache: dict[str, Placement | Dropped | None] = {}
 
     # -- objects ---------------------------------------------------------

@@ -1,6 +1,8 @@
 {
   "_doc": "HW1 tilemap -> AE tilesets painted on the same tiles, bottom layer first. Learned by overlaying the HW1 and AE Castle Hammerwatch floors; the percentage is how much of the HW1 tileset the first AE tileset covers.",
-  "tilemaps/a_default.xml": ["tilesets/prison_dirt.tileset", "tilesets/prison_tiles.tileset"],
+  "_grow_doc": "The first AE tileset of each entry is the bottom layer and is painted one tile past the HW1 floor, as AE's own floors are, except the tilesets in _overlays: those are decals over another floor, and growing them spreads them where AE doesn't paint them.",
+  "_overlays": ["tilesets/prison_grass_sparse.tileset", "tilesets/slime_dark_16.tileset"],
+  "tilemaps/a_default.xml":["tilesets/prison_dirt.tileset", "tilesets/prison_tiles.tileset"],
   "tilemaps/a_scattered.xml": ["tilesets/prison_dirt.tileset", "tilesets/prison_tiles.tileset"],
   "tilemaps/a_dirt.xml": ["tilesets/prison_dirt_red.tileset"],
   "tilemaps/a_dirt_scattered.xml": ["tilesets/prison_dirt_red.tileset"],

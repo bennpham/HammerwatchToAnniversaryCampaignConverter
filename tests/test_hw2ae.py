@@ -85,6 +85,24 @@ def test_cells_are_centred_on_the_512_grid():
     assert rects == {(0, 0, 16), (240, 240, 16), (256, 0, 16), (-272, -16, 16)}
 
 
+def test_bottom_layer_grows_past_the_floor(monkeypatch):
+    from hw2ae.convert import BOTTOM_LAYER_GROW
+    tl = tiles.TileLayers(Path("does-not-exist"))
+    tl.paint16("tilesets/fine.tileset", {(0, 0)}, grow=BOTTOM_LAYER_GROW)
+    # 1 tile left and up, 2 right and down: HW1 floors stop 2 rows short of
+    # bottom walls, and AE's right-hand wall art sits further out.
+    assert tl.layers["tilesets/fine.tileset"] == {(x, y) for x in (-1, 0, 1, 2) for y in (-1, 0, 1, 2)}
+
+    # A 32-px layer keeps a coarse tile only when half of it is floor, which
+    # drops a lone 16-px tile; grown, it takes every coarse tile it touches.
+    monkeypatch.setattr(tiles.TileLayers, "size", lambda self, ts: 32)
+    coarse = tiles.TileLayers(Path("does-not-exist"))
+    coarse.paint16("tilesets/coarse.tileset", {(1, 1)})
+    assert coarse.layers["tilesets/coarse.tileset"] == set()
+    coarse.paint16("tilesets/grown.tileset", {(1, 1)}, grow=(1, 1, 1, 1))
+    assert coarse.layers["tilesets/grown.tileset"] == {(0, 0), (1, 0), (0, 1), (1, 1)}
+
+
 # -- HW1 reading -----------------------------------------------------------
 
 def test_reads_generator_dialect():

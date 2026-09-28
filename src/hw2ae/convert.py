@@ -25,6 +25,11 @@ DEFAULT_ENV = "effects/lighting/prison_1.env"
 BRIGHT_ENV = "effects/lighting/bonus.env"
 BRIGHT_AMBIENT = 128
 EXIT_WIDTH = 64
+# Tiles (left, up, right, down) a floor's bottom layer reaches past the HW1
+# floor, so its border hides under the walls as in AE's own levels. HW1 floors
+# stop 1 tile short of left/top walls but 2 short of bottom walls, and AE's
+# right-hand wall art sits further out than its left-hand art.
+BOTTOM_LAYER_GROW = (1, 1, 2, 2)
 # AE hard-codes the party's starting lives (PartyRecord.as); only the
 # NO_LIVES / DOUBLE_LIVES / INFINITE_LIVES modifiers change them.
 AE_LIVES = 2
@@ -101,8 +106,9 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
             report.unmapped_tilesets[hw1_ts] += len(layer.tiles)
             continue
         tiles16 = set(layer.tiles)
-        for ts in targets:
-            tl.paint16(ts, tiles16)
+        for i, ts in enumerate(targets):
+            grow = BOTTOM_LAYER_GROW if i == 0 and ts not in resolver.overlay_tilesets else None
+            tl.paint16(ts, tiles16, grow)
     out.tile_cells = tl.cells()
 
     # -- units and prefabs -------------------------------------------------
