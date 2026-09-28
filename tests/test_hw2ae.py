@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from hw2ae import sval
-from hw2ae.ae import level_reader, level_writer, tiles
+from hw2ae.ae import doors, level_reader, level_writer, tiles
 from hw2ae.ae.model import Level, Param, Script, Unit
 from hw2ae.ae.scripts import ScriptContext, convert_scripts
 from hw2ae.config import find_ae_assets, find_ae_root
@@ -70,14 +70,37 @@ def test_rle_roundtrip_random():
         assert tiles.decode_rle(tiles.encode_rle(grid), side) == grid
 
 
-def test_cells_are_centred():
+def test_cells_are_centred_on_the_512_grid():
+    # AE centres cells on multiples of 512 (cell 0 covers -256..256) and
+    # floors any other pos onto that grid, so an off-grid cell would shift.
     tl = tiles.TileLayers(Path("does-not-exist"))
-    tl.paint16("tilesets/x.tileset", {(0, 0), (31, 31)})
+    tl.paint16("tilesets/x.tileset", {(0, 0), (15, 15), (16, 0), (-17, -1)})
     cells = tl.cells()
-    assert list(cells) == [(256, 256)]
-    (ts, rle), = cells[(256, 256)]
-    rects = list(tiles.decode_cell((256, 256), ts, rle, 16))
-    assert (0, 0, 16) in rects and (496, 496, 16) in rects
+    assert set(cells) == {(0, 0), (512, 0), (-512, 0)}
+    rects = set()
+    for pos, datasets in cells.items():
+        assert pos[0] % 512 == 0 and pos[1] % 512 == 0
+        for ts, rle in datasets:
+            rects |= set(tiles.decode_cell(pos, ts, rle, 16))
+    assert rects == {(0, 0, 16), (240, 240, 16), (256, 0, 16), (-272, -16, 16)}
+
+
+def test_bottom_layer_grows_past_the_floor(monkeypatch):
+    from hw2ae.convert import BOTTOM_LAYER_GROW
+    tl = tiles.TileLayers(Path("does-not-exist"))
+    tl.paint16("tilesets/fine.tileset", {(0, 0)}, grow=BOTTOM_LAYER_GROW)
+    # 1 tile left and up, 2 right and down: HW1 floors stop 2 rows short of
+    # bottom walls, and AE's right-hand wall art sits further out.
+    assert tl.layers["tilesets/fine.tileset"] == {(x, y) for x in (-1, 0, 1, 2) for y in (-1, 0, 1, 2)}
+
+    # A 32-px layer keeps a coarse tile only when half of it is floor, which
+    # drops a lone 16-px tile; grown, it takes every coarse tile it touches.
+    monkeypatch.setattr(tiles.TileLayers, "size", lambda self, ts: 32)
+    coarse = tiles.TileLayers(Path("does-not-exist"))
+    coarse.paint16("tilesets/coarse.tileset", {(1, 1)})
+    assert coarse.layers["tilesets/coarse.tileset"] == set()
+    coarse.paint16("tilesets/grown.tileset", {(1, 1)}, grow=(1, 1, 1, 1))
+    assert coarse.layers["tilesets/grown.tileset"] == {(0, 0), (1, 0), (0, 1), (1, 1)}
 
 
 # -- HW1 reading -----------------------------------------------------------
@@ -135,23 +158,32 @@ def test_wall_mapping_and_offsets():
 def test_scripts_exit_shop_and_game_end():
     lv0 = hw1_level.load(FIX / "levels" / "level0.xml")
     out = Level("DungeonGameMode", None)
-    ctx = ScriptContext(out, {}, lambda i: f"levels/test/level{i}.lvl", {"def"}, warn=lambda m: None)
+    ctx = ScriptContext(out, {}, lambda i: f"levels/test/level{i}.lvl", warn=lambda m: None)
     convert_scripts(lv0.scripts, ctx)
     classes = [s.cls for s in out.scripts]
     assert classes.count("LevelStart") == 1
-    assert "ShopArea" not in classes  # a shop prefab already stands in for it
+    # A shop is a UseTrigger on the HW1 area feeding a ShopArea, as in Castle Hammerwatch.
+    use = next(s for s in out.scripts if s.cls == "UseTrigger")
+    shop = next(s for s in out.scripts if s.cls == "ShopArea")
+    assert use.connections == [(shop.id, 0)]
+    assert Param("string", "Categories", "def1 def2 def3 def4 def5") in shop.params
+    assert Param("target", "#PlayerTarget", (use.id, "User")) in shop.params
     trig = next(s for s in out.scripts if s.cls == "AreaTrigger")
     exit_ = next(s for s in out.scripts if s.cls == "LevelExit")
     assert trig.connections == [(exit_.id, 0)]
     assert Param("string", "Level", "levels/test/level1.lvl") in exit_.params
+    # HW1 start id 0 is AE's default spawn: no StartID at all, on both ends.
+    start = next(s for s in out.scripts if s.cls == "LevelStart")
+    assert start.params == [] and start.label == "default spawn"
+    assert not any(p.name == "StartID" for p in exit_.params)
     rects = [u for u in out.units if u.path == ":Physics_Rectangle"]
-    assert len(rects) == 1 and rects[0].state["size"] == ("vec2", (32.0, 16.0))
+    exit_rect = next(r for r in rects if r.state["size"] == ("vec2", (32.0, 16.0)))
     areas = next(p for p in trig.params if p.name == "Areas")
-    assert areas.value == [rects[0].id]
+    assert areas.value == [exit_rect.id]
 
     lv1 = hw1_level.load(FIX / "levels" / "level1.xml")
     out1 = Level("DungeonGameMode", None)
-    ctx1 = ScriptContext(out1, {2: 99}, lambda i: None, set(), warn=lambda m: None)
+    ctx1 = ScriptContext(out1, {2: 99}, lambda i: None, warn=lambda m: None)
     convert_scripts(lv1.scripts, ctx1)
     ud = next(s for s in out1.scripts if s.cls == "UnitDestroyedTrigger")
     assert ud.trigger_times == 1 and next(p for p in ud.params if p.name == "Units").value == [99]
@@ -160,12 +192,73 @@ def test_scripts_exit_shop_and_game_end():
     assert ud.connections == [(ann.id, 250)] and ann.connections == [(end.id, 3000)]
 
 
+# -- doors -----------------------------------------------------------------
+
+def _door_obj(i, name, x, y):
+    return hw1_level.Obj(i, f"items/{name}.xml", x, y)
+
+
+def _wall(i, piece, x, y):
+    return hw1_level.Obj(i, f"doodads/theme_a/a_{piece}.xml", x, y)
+
+
+def _doors(objs, walls=()):
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    pieces = [(o, r.resolve(o.type).door) for o in objs]
+    out = Level("DungeonGameMode", None)
+    n = doors.convert(pieces, list(walls), out, {})
+    return n, out
+
+
+def test_door_generator_row_fills_the_wall_gap():
+    # Generator: five 16-px h_v2 pieces between walls at x=21 and x=27.
+    objs = [_door_obj(i, "door_a_silver_h_v2", 22.5 + i, 43.0) for i in range(5)]
+    n, out = _doors(objs)
+    assert n == 1
+    got = [(u.path.rsplit("/", 1)[-1], u.x, u.y) for u in out.units]
+    assert got == [("door_h_cap_l_silver_prison.unit", 352, 704),
+                   ("door_h_mid_silver_prison.unit", 368, 704),
+                   ("door_h_mid_silver_prison.unit", 384, 704),
+                   ("door_h_mid_silver_prison.unit", 400, 704),
+                   ("door_h_cap_r_silver_prison.unit", 416, 704)]
+    dc, = out.scripts
+    assert dc.cls == "DoorController"
+    assert Param("string", "Collectable", "key_silver") in dc.params
+    assert Param("ids", "Doors", [u.id for u in out.units]) in dc.params
+
+
+def test_door_castle_row_matches_ae_remake():
+    # Castle Hammerwatch level 2: cap_l, h_v2, h, cap_r -> AE cap_l, mid, mid, cap_r.
+    objs = [_door_obj(1, "door_a_gold_h_cap_l", -23.5, -17.5), _door_obj(2, "door_a_gold_h_v2", -23.0, -17.5),
+            _door_obj(3, "door_a_gold_h", -21.5, -17.5), _door_obj(4, "door_a_gold_h_cap_r", -20.5, -17.5)]
+    _, out = _doors(objs)
+    assert [(u.x, u.y) for u in out.units] == [(-384, -272), (-368, -272), (-352, -272), (-336, -272)]
+
+
+def test_door_column_fills_rows_between_walls():
+    # Generator: bronze v pieces at rows 27-30, walls end at row 26 and resume at row 31.
+    objs = [_door_obj(i, "door_a_bronze_v", 50.5, 27.0 + i) for i in range(4)]
+    walls = [_wall(10, "x_t_dn", 50, 26), _wall(11, "crn_r_dn", 51, 26), _wall(12, "crn_l_up", 50, 31)]
+    _, out = _doors(objs, walls)
+    parts = [u.path.rsplit("/", 1)[-1].split("_bronze")[0] for u in out.units]
+    assert parts == ["door_v_cap_u", "door_v_mid", "door_v_mid", "door_v_mid", "door_v_cap_d"]
+    assert [u.y for u in out.units] == [448, 464, 480, 496, 512]
+    assert {u.x for u in out.units} == {800}
+
+
+def test_separate_doors_get_separate_controllers():
+    objs = [_door_obj(1, "door_a_bronze_h_v2", 10.5, 5.0), _door_obj(2, "door_a_bronze_h_v2", 11.5, 5.0),
+            _door_obj(3, "door_a_bronze_h_v2", 30.5, 5.0), _door_obj(4, "door_a_gold_h_v2", 12.5, 5.0)]
+    n, out = _doors(objs)
+    assert n == 3 and [s.cls for s in out.scripts] == ["DoorController"] * 3
+
+
 def test_level_writer_roundtrip(tmp_path):
     lv = Level("DungeonGameMode", "effects/lighting/bonus.env")
     lv.units.append(Unit("doodads/generic/lamps/torch.unit", 8, 16, 1, {"start": ("string", "n-off")}))
     lv.units.append(Unit("doodads/generic/lamps/torch.unit", 40, 16, 2))
-    lv.scripts.append(Script("LevelStart", 3, 0, 0, params=[Param("string", "StartID", "0")]))
-    lv.tile_cells = {(256, 256): [("tilesets/prison_dirt.tileset", "7e7e04")]}
+    lv.scripts.append(Script("LevelStart", 3, 0, 0, params=[Param("string", "StartID", "north")]))
+    lv.tile_cells = {(0, 0): [("tilesets/prison_dirt.tileset", "7e7e04")]}
     path = tmp_path / "x.lvl"
     level_writer.write(lv, path)
     back = level_reader.load(path)
@@ -189,11 +282,14 @@ def test_convert_fixture_against_ae(tmp_path):
     report = convert(Options(source=FIX, out=tmp_path / "test_dungeon", ae_assets=AE_ASSETS, log=lambda *a: None))
     assert report.levels == 2
     assert report.unmapped == {"items/some_unknown_item.xml": 1}
+    assert any("sets 0 lives" in w for w in report.warnings)
     problems, n = validate(tmp_path / "test_dungeon", AssetIndex(AE_ASSETS))
     assert n == 2 and not problems, problems.items
     lvl0 = level_reader.load(tmp_path / "test_dungeon" / "levels" / "test_dungeon" / "level0.lvl")
     assert lvl0.environment == "effects/lighting/bonus.env"  # HW1 ambient 255 -> bright
-    assert [p.path for p in lvl0.prefabs] == ["prefabs/shop_defense.pfb"]
+    assert lvl0.prefabs == []
+    assert any(u.type == "doodads/generic/shop_defense.unit" for u in lvl0.units)
+    assert {"UseTrigger", "ShopArea"} <= {s.cls for s in lvl0.scripts}
     walls = [u for u in lvl0.units if u.type == "doodads/walls/prison/x_w.unit"]
     assert [(w.x, w.y) for w in walls] == [(48, 80)]
     lvl1 = level_reader.load(tmp_path / "test_dungeon" / "levels" / "test_dungeon" / "level1.lvl")

@@ -8,7 +8,8 @@ from dataclasses import dataclass, field
 @dataclass
 class Param:
     """One named value in a script's parameter dict. ``kind`` is an SVAL tag:
-    string, int, float, bool, or ``ids`` for an array of unit/script ids."""
+    string, int, float, bool, ``ids`` for an array of unit/script ids, or
+    ``target`` for a ``(script id, event)`` feed such as ``#PlayerTarget``."""
     kind: str
     name: str
     value: object

@@ -7,8 +7,9 @@ most nodes translate one to one. The differences handled here:
   scripts; triggers point at them through their ``Areas`` array.
 * ``LevelExitArea`` is two AE scripts: an ``AreaTrigger`` wired to a ``LevelExit``.
 * ``GameEnd`` is an ``AnnounceText`` followed by ``ShowGameOver`` (credits).
-* ``ShopArea`` is dropped when a vendor was converted into an AE shop prefab,
-  because the prefab carries its own shop script.
+* ``ShopArea`` is a ``UseTrigger`` on its area feeding an AE ``ShopArea``, the
+  way Castle Hammerwatch's shops are wired. (AE's shop prefabs pick their
+  stock from progression flags a converted scenario never sets.)
 * ``RespawnPlayers`` has no AE world script; AE revives through its own rules.
 """
 
@@ -19,17 +20,12 @@ from typing import Callable
 
 from .. import sval
 from ..hw1.level import ScriptNode
-from .model import Level, Param, PrefabPlacement, Script, Unit
+from .model import Level, Param, Script, Unit
 
 TILE = 16
 
-SHOP_PREFABS = {
-    "def": "prefabs/shop_defense.pfb",
-    "off": "prefabs/shop_offense.pfb",
-    "combo": "prefabs/shop_combo.pfb",
-    "misc": "prefabs/shop_health.pfb",
-    "power": "prefabs/shop_potion.pfb",
-}
+# UseTrigger's shop icon, as on Castle Hammerwatch's shops.
+SHOP_ICON = 4
 
 # HW1 AreaTrigger ``types`` bits -> AE AreaFilter bits.
 _AREA_FILTER = {1: 2, 2: 4, 4: 8 | 16 | 32, 8: 64}
@@ -57,12 +53,20 @@ def _val(params: sval.Node | None, name: str, default=None):
     return default if n is None or n.children else n.value
 
 
+def _start_id(v) -> str | None:
+    """HW1 start id -> AE ``StartID``; ``None`` for HW1's default start (0).
+
+    A new AE game spawns at the ``LevelStart`` whose ``StartID`` is empty, and
+    AE's own levels leave the param out for that one. HW1's default is id 0."""
+    s = str(v if v is not None else "").strip()
+    return None if s in ("", "0") else s
+
+
 @dataclass
 class ScriptContext:
     level: Level
     id_map: dict[int, int]                      # HW1 id -> AE id (units and scripts)
     level_path_for: Callable[[str], str | None]  # HW1 level id -> AE .lvl path
-    shop_categories_placed: set[str]            # category prefixes covered by shop prefabs
     warn: Callable[[str], None]
     dropped: set[int] = field(default_factory=set)
 
@@ -87,17 +91,8 @@ def convert_scripts(nodes: list[ScriptNode], ctx: ScriptContext) -> None:
             ctx.id_map[n.id] = uid
         elif n.type == "RespawnPlayers":
             ctx.dropped.add(n.id)
-        elif n.type == "ShopArea" and _shop_is_covered(n, ctx):
-            ctx.dropped.add(n.id)
-            for sid in _ids(n.params, "shape"):
-                ctx.dropped.add(sid)
         else:
             ctx.id_map[n.id] = lv.new_id()
-
-    # Shapes that only served a dropped ShopArea should go too.
-    lv.units[:] = [u for u in lv.units
-                   if not (u.path.startswith(":Physics") and
-                           any(ctx.id_map.get(s) == u.id for s in ctx.dropped))]
 
     unsupported: dict[str, int] = {}
     for n in nodes:
@@ -136,21 +131,6 @@ def _physics_state(extra: dict) -> dict:
     return s
 
 
-def _shop_is_covered(n: ScriptNode, ctx: ScriptContext) -> bool:
-    cats = str(_val(n.params, "cats", "") or "").split()
-    prefixes = {c.rstrip("0123456789") for c in cats}
-    if prefixes and prefixes <= ctx.shop_categories_placed:
-        return True
-    # No vendor in this level: place the matching shop prefab on the shop area.
-    for p in prefixes:
-        path = SHOP_PREFABS.get(p)
-        if path:
-            ctx.level.prefabs.append(PrefabPlacement(path, n.x * TILE, n.y * TILE))
-            ctx.shop_categories_placed.add(p)
-            return True
-    return False
-
-
 def _feed(ctx: ScriptContext, hw1_ids: list[int]) -> list[int]:
     return [ctx.id_map[i] for i in hw1_ids if i in ctx.id_map and i not in ctx.dropped]
 
@@ -162,7 +142,10 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
     t = n.type
 
     if t == "LevelStart":
-        return [Script("LevelStart", sid, x, y, params=[Param("string", "StartID", str(_val(p, "id", 0)))])]
+        start_id = _start_id(_val(p, "id", 0))
+        if start_id is None:
+            return [Script("LevelStart", sid, x, y, label="default spawn")]
+        return [Script("LevelStart", sid, x, y, params=[Param("string", "StartID", start_id)])]
 
     if t == "LevelExitArea":
         trig = Script("AreaTrigger", sid, x, y, params=[
@@ -175,10 +158,11 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
         if lvl is None:
             ctx.warn(f"level exit points at unknown level id '{target}'")
             lvl = ""
-        exit_ = Script("LevelExit", ctx.level.new_id(), x + 16, y, label=lvl, params=[
-            Param("string", "Level", lvl),
-            Param("string", "StartID", str(_val(p, "start id", 0))),
-        ])
+        exit_ = Script("LevelExit", ctx.level.new_id(), x + 16, y, label=lvl,
+                       params=[Param("string", "Level", lvl)])
+        start_id = _start_id(_val(p, "start id", 0))
+        if start_id is not None:
+            exit_.params.append(Param("string", "StartID", start_id))
         trig.connections.append((exit_.id, 0))
         return [trig, exit_]
 
@@ -234,9 +218,16 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
         return [ann, end]
 
     if t == "ShopArea":
-        # Only reached when no shop prefab could stand in for it.
-        return [Script("ShopArea", sid, x, y, params=[
-            Param("string", "Categories", str(_val(p, "cats", ""))),
-        ])]
+        cats = str(_val(p, "cats", ""))
+        use = Script("UseTrigger", sid, x, y, label="Shop", params=[
+            Param("int", "Icon", SHOP_ICON),
+            Param("ids", "Areas", _feed(ctx, _ids(p, "shape"))),
+        ])
+        shop = Script("ShopArea", ctx.level.new_id(), x + 16, y, label=cats, params=[
+            Param("string", "Categories", cats),
+            Param("target", "#PlayerTarget", (sid, "User")),
+        ])
+        use.connections.append((shop.id, 0))
+        return [use, shop]
 
     return None

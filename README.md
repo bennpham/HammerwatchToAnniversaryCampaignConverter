@@ -66,12 +66,18 @@ correspondences and pixel offsets.
   `h`), so every piece has a candidate list. AE exits are 64 px wide where HW1's were 32, so
   the wall pieces and torches under an exit are removed.
 - **Cover** `color_theme_<t>_<N>` → `walls/<theme>/__color_<N>`.
-- **Doors** `door_<t>_<metal>_<h|v>…` → `doodads/doors/door_<h|v>_mid_<metal>_<theme>`.
+- **Doors** `door_<t>_<metal>_<h|v>…` are grouped per door and laid out again as an AE run
+  (`cap_l, mid…, cap_r` / `cap_u, mid…, cap_d`) of `doodads/doors/door_*_<metal>_<theme>`, in
+  the level's theme, with a `DoorController` taking `key_<metal>`: AE doors don't open without
+  one. Horizontal runs cover the HW1 pieces' collision span; vertical runs fill the rows between
+  the walls above and below.
 - **Enemies** are matched on identical hit points (e.g. `skeleton_1_small` → `skeleton_warrior_weak`,
   `lich_3` → `skeleton_necromancer`, `tick_1_elite` → `tick_gold`).
-- **Shops**: a `vendor_*` doodad becomes the matching AE shop prefab
-  (`prefabs/shop_defense.pfb`, …), which carries its own shop script; HW1's `ShopArea` is
-  dropped. The categories line up exactly (`def1-5`, `off1-5`, `combo1-5`, `misc1-5`).
+- **Shops**: a `vendor_*` doodad becomes the matching AE shop unit
+  (`doodads/generic/shop_defense.unit`, …), and HW1's `ShopArea` a `UseTrigger` on its area
+  feeding an AE `ShopArea`, as Castle Hammerwatch wires them. The categories line up exactly
+  (`def1-5`, `off1-5`, `combo1-5`, `misc1-5`). AE's shop prefabs aren't used: they pick their
+  stock from progression flags a converted scenario never sets.
 - **Floors.** HW1 tilemaps map to AE tilesets (`a_default` → `prison_dirt` + `prison_tiles`,
   …) by measured overlap. AE picks tile variants and borders itself, so only "painted or not"
   carries over.
@@ -91,7 +97,12 @@ new; the converter lists everything it couldn't map with counts.
 ### AE file-format notes
 
 - `.lvl` is SVAL text: `game-mode`, `version`, `lighting`, `tiles`, `units`, `scripts`, `prefabs`.
-- A tile cell's `pos` is its **centre**; it covers `pos ± 256` px.
+- A tile cell's `pos` is its **centre**; it covers `pos ± 256` px and is always a multiple of
+  512 (AE floors any other `pos` onto that grid, shifting the floor by up to 511 px).
+- A new game spawns at the `LevelStart` with no `StartID` param (AE's "default spawn"); HW1's
+  start id `0` maps to that, and a `LevelExit` without `StartID` leads to it.
+- Starting lives are fixed at 2 in AE; only the `NO_LIVES` / `DOUBLE_LIVES` / `INFINITE_LIVES`
+  modifiers change them, so a HW1 `<lives>` value is reported, not converted.
 - `data-rle` is a row-major presence grid of `(512 / tileset size)²` tiles stored as **signed
   byte runs**: `n > 0` painted, `n < 0` empty, capped at ±126.
 - A script entry is `[class, id, vec3 pos, enabled, trigger-times, execute-on-start,
