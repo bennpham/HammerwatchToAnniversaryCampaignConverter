@@ -33,6 +33,8 @@ TILE = 16
 
 # UseTrigger's shop icon, as on Castle Hammerwatch's shops.
 SHOP_ICON = 4
+# WorldScript::ShopAreaType.Power
+SHOP_TYPE_POWER = 1
 
 # AE scripts that fire their targets through a named feed rather than links.
 FEED_LINKS = {"AllPlayersAreaTrigger": "OnAllEntered"}
@@ -302,6 +304,11 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
             Param("string", "Categories", cats),
             Param("target", "#PlayerTarget", (sid, "User")),
         ])
+        if "power" in cats.split():
+            # The potion vendor: AE's power shop is its own menu (ShopAreaType
+            # Power), as in prefabs/shop_potion.pfb; the default skill shop
+            # has nothing under "power".
+            shop.params.append(Param("int", "Type", SHOP_TYPE_POWER))
         use.connections.append((shop.id, 0))
         return [use, shop]
 

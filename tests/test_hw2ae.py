@@ -242,6 +242,17 @@ def test_minibosses_are_mapped():
     assert r.resolve("actors/lich_1_mb.xml").path == "actors/undead/skeletons/hammerwatch/skeleton_wizard.unit"
 
 
+def test_potion_vendor_opens_the_power_shop():
+    from hw2ae import sval
+    lv = hw1_level.load(FIX / "levels" / "level0.xml")
+    node = next(n for n in lv.scripts if n.type == "ShopArea")
+    node.params = sval.parse_text('<dictionary><string name="cats">power</string></dictionary>')
+    out = Level("DungeonGameMode", None)
+    convert_scripts([node], ScriptContext(out, {}, lambda i: None, warn=lambda m: None))
+    shop = next(s for s in out.scripts if s.cls == "ShopArea")
+    assert Param("int", "Type", 1) in shop.params
+
+
 def test_blue_and_gold_ticks_stay_apart():
     # tick_1_elite (spiky blue) and tick_2 (gold) share 70 HP with AE's tick_gold.
     r = Resolver(AllExist())  # type: ignore[arg-type]
