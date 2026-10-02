@@ -65,6 +65,9 @@ SPEWER_DIRECTIONS = {0: 270, 1: 90, 2: 180, 3: 0}
 # FloatCompareFunc.Less, ActorHealthTrigger's default in AE's levels.
 HEALTH_LESS = 2
 
+# DangerArea's DamageFilter: Neutral 1 | Player 2 | Enemy 4 | Other 64 (its default).
+DAMAGE_FILTER_ALL = 71
+
 # HW1 AreaTrigger ``types`` bits -> AE AreaFilter bits.
 _AREA_FILTER = {1: 2, 2: 4, 4: 8 | 16 | 32, 8: 64}
 
@@ -118,11 +121,14 @@ class ScriptContext:
     boss_bar_name: str = ""
     # HW1 object type -> AE unit path, as placed objects resolve (SpawnObject).
     resolve_unit: Callable[[str], str | None] = lambda hw1_type: None
+    # The level's HW1 script nodes by id, for nodes that read another's params.
+    nodes: dict[int, ScriptNode] = field(default_factory=dict)
 
 
 def convert_scripts(nodes: list[ScriptNode], ctx: ScriptContext) -> None:
     lv = ctx.level
     by_id = {n.id: n for n in nodes}
+    ctx.nodes = by_id
 
     # Pass 1: shapes become physics units; everything else reserves an AE id.
     for n in nodes:
@@ -332,11 +338,16 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
         ])]
 
     if t == "DangerArea":
+        shapes = _ids(p, "shape")
         params = [
-            Param("ids", "Areas", _feed(ctx, _ids(p, "shape"))),
+            Param("ids", "Areas", _feed(ctx, shapes)),
             Param("int", "Damage", int(_val(p, "damage", 0))),
             Param("int", "Frequency", int(_val(p, "freq", 500))),
         ]
+        # HW1 picks who a zone affects on its shape ("types"); AE on the zone.
+        flt = _damage_filter(ctx, shapes)
+        if flt is not None:
+            params.append(Param("int", "Filter", flt))
         buff = str(_val(p, "buff", "") or "")
         if buff:
             # HW1 buffs/<name>.xml -> AE's buff table entry of the same name.
@@ -402,6 +413,23 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
         return [use, shop]
 
     return None
+
+
+def _damage_filter(ctx: ScriptContext, shape_ids: list[int]) -> int | None:
+    """AE DamageFilter for a zone whose HW1 shapes list ``types``; ``None``
+    keeps AE's default (everything)."""
+    types = 0
+    for i in shape_ids:
+        shape = ctx.nodes.get(i)
+        if shape is None or _val(shape.params, "types") is None:
+            return None  # a shape without types affects everything in HW1
+        types |= int(_val(shape.params, "types"))
+    flt = 0
+    for bit, ae_bits in _AREA_FILTER.items():
+        if types & bit:
+            flt |= ae_bits
+    flt &= DAMAGE_FILTER_ALL
+    return flt if 0 < flt and flt != DAMAGE_FILTER_ALL & ~1 else None
 
 
 def _packed(params: sval.Node | None):
