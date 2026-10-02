@@ -11,6 +11,13 @@ most nodes translate one to one. The differences handled here:
 * ``PlaySound`` takes an AE FMOD event, looked up in ``mapping/data/sounds.json``.
 * ``PlayMusic`` sets AE's ``MusicMode`` (and ``AmbienceMode``) from the same file.
 * ``DestroyObject`` is ``DestroyUnits``; ``ChangeDoodadState`` is ``SetUnitScene``.
+* A boss's "Boss N%" / "Boss Died" global events become an ``ActorHealthTrigger``
+  / ``UnitDestroyedTrigger`` on the boss, plus a ``CreateBossBar``, as in AE's
+  own dragon level.
+* ``SpawnObject``, ``TimerTrigger``, ``ToggleImmortality``, ``ProjectileSpewer``
+  and ``DangerArea`` have AE scripts of the same purpose; ``Checkpoint`` is a
+  ``LevelStart`` plus a ``SetRespawnPoint`` to it. The random dungeon generator
+  packs single-value parameters (see ``_packed``).
 * ``GameEnd`` is an ``AnnounceText`` followed by ``ShowGameOver`` (credits).
 * ``ShopArea`` is a ``UseTrigger`` on its area feeding an AE ``ShopArea``, the
   way Castle Hammerwatch's shops are wired. (AE's shop prefabs pick their
@@ -21,8 +28,9 @@ most nodes translate one to one. The differences handled here:
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Callable
 
 from .. import sval
@@ -47,6 +55,15 @@ MUSIC: dict[str, int] = _SOUND_DATA["music"]
 AMBIENCE: dict[str, int] = _SOUND_DATA["ambience"]
 # Tracks AE plays as a one-shot stinger rather than a music mode.
 MUSIC_STINGERS: dict[str, str] = _SOUND_DATA["music_stingers"]
+
+# HW1 projectile -> AE projectile unit, for ProjectileSpewer.
+PROJECTILES: dict[str, str] = {k: v for k, v in json.loads(
+    (Path(__file__).parent.parent / "mapping" / "data" / "projectiles.json").read_text()).items()
+    if not k.startswith("_")}
+# HW1 spewer direction (0-3) -> AE degrees, from Crackshell's HW1 converter.
+SPEWER_DIRECTIONS = {0: 270, 1: 90, 2: 180, 3: 0}
+# FloatCompareFunc.Less, ActorHealthTrigger's default in AE's levels.
+HEALTH_LESS = 2
 
 # HW1 AreaTrigger ``types`` bits -> AE AreaFilter bits.
 _AREA_FILTER = {1: 2, 2: 4, 4: 8 | 16 | 32, 8: 64}
@@ -96,6 +113,11 @@ class ScriptContext:
     level_path_for: Callable[[str], str | None]  # HW1 level id -> AE .lvl path
     warn: Callable[[str], None]
     dropped: set[int] = field(default_factory=set)
+    # AE ids of the level's boss actors, which fire HW1's "Boss N%" events.
+    boss_ids: list[int] = field(default_factory=list)
+    boss_bar_name: str = ""
+    # HW1 object type -> AE unit path, as placed objects resolve (SpawnObject).
+    resolve_unit: Callable[[str], str | None] = lambda hw1_type: None
 
 
 def convert_scripts(nodes: list[ScriptNode], ctx: ScriptContext) -> None:
@@ -131,7 +153,9 @@ def convert_scripts(nodes: list[ScriptNode], ctx: ScriptContext) -> None:
             made = [Script("ScriptLink", ctx.id_map[n.id], n.x * TILE, n.y * TILE)]
         first = made[0]
         first.enabled = n.enabled
-        first.trigger_times = n.trigger_times
+        # HW1's boss events fire once; AE's health trigger fires on every hit
+        # below the threshold, so it is made one-shot as AE's own levels do.
+        first.trigger_times = 1 if first.cls == "ActorHealthTrigger" else n.trigger_times
         # The last script of an expansion carries the node's outgoing links.
         last = made[-1]
         links: list[tuple[int, int]] = []
@@ -150,8 +174,17 @@ def convert_scripts(nodes: list[ScriptNode], ctx: ScriptContext) -> None:
         else:
             last.connections.extend(links)
         lv.scripts.extend(made)
+    if ctx.boss_ids:
+        lv.scripts.append(Script("CreateBossBar", lv.new_id(), 0, 0, execute_on_start=True, params=[
+            Param("ids", "Actors", list(ctx.boss_ids)),
+            Param("string", "Name", ctx.boss_bar_name),
+        ]))
     for t, k in sorted(unsupported.items()):
         ctx.warn(f"unsupported script node '{t}' x{k}; kept as a plain ScriptLink so its links still fire")
+    respawns = sum(1 for n in nodes if n.type == "RespawnPlayers")
+    if respawns:
+        ctx.warn(f"RespawnPlayers x{respawns} left out: AE has no world script that revives players "
+                 "(they come back through AE's lives)")
 
 
 def _physics_state(extra: dict) -> dict:
@@ -257,10 +290,66 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
     if t == "GlobalEventTrigger":
         # The HW1 editor writes {event: ...}; the random dungeon generator
         # writes the event name as the whole parameters value.
-        event = p.value if p is not None and p.tag == "string" else _val(p, "event", "")
-        if str(event) in ("LevelLoaded", "0"):
+        event = str(_packed(p) if _packed(p) is not None else _val(p, "event", ""))
+        if event in ("LevelLoaded", "0"):
             return [Script("ScriptLink", sid, x, y, execute_on_start=True)]
-        return None
+        return _boss_event(event, ctx, sid, x, y)
+
+    if t == "SpawnObject":
+        hw1_type = str(_packed(p) if _packed(p) is not None else _val(p, "type", ""))
+        unit = ctx.resolve_unit(hw1_type)
+        if unit is None:
+            ctx.warn(f"SpawnObject of '{hw1_type}', which has no AE unit yet; kept as a plain ScriptLink")
+            return [Script("ScriptLink", sid, x, y)]
+        return [Script("SpawnUnit", sid, x, y, label=unit.rsplit("/", 1)[-1],
+                       params=[Param("string", "UnitType", unit)])]
+
+    if t == "TimerTrigger":
+        freq = _packed(p) if _packed(p) is not None else _val(p, "freq", 1000)
+        return [Script("TimerTrigger", sid, x, y, params=[Param("int", "Frequency", int(freq))])]
+
+    if t == "ToggleImmortality":
+        # HW1 0/1/2 = make immortal / mortal / toggle (the generator's dragon
+        # is immortal through each 30-s wave countdown) -> AE Enable/Disable/Toggle.
+        state = int(_val(p, "state", 0))
+        return [Script("ToggleImmortality", sid, x, y, params=[
+            Param("int", "State", min(state, 2) + 1),
+            Param("ids", "Units", _feed(ctx, _ids(p, "element"))),
+        ])]
+
+    if t == "ProjectileSpewer":
+        hw1_proj = str(_val(p, "projectile", ""))
+        proj = PROJECTILES.get(hw1_proj)
+        if proj is None:
+            ctx.warn(f"no AE projectile for HW1 '{hw1_proj}' yet (add it to mapping/data/projectiles.json); "
+                     "its ProjectileSpewer is kept as a plain ScriptLink")
+            return [Script("ScriptLink", sid, x, y)]
+        return [Script("ProjectileSpewer", sid, x, y, label=hw1_proj.rsplit("/", 1)[-1], params=[
+            Param("string", "Projectile", proj),
+            Param("int", "Direction", SPEWER_DIRECTIONS.get(int(_val(p, "direction", 0)), 0)),
+            Param("float", "Spread", float(_val(p, "spread", 0.0))),
+            Param("int", "Frequency", int(_val(p, "spawn-rate", 1000))),
+        ])]
+
+    if t == "DangerArea":
+        params = [
+            Param("ids", "Areas", _feed(ctx, _ids(p, "shape"))),
+            Param("int", "Damage", int(_val(p, "damage", 0))),
+            Param("int", "Frequency", int(_val(p, "freq", 500))),
+        ]
+        buff = str(_val(p, "buff", "") or "")
+        if buff:
+            # HW1 buffs/<name>.xml -> AE's buff table entry of the same name.
+            params.append(Param("string", "Buff", f"actors/buffs.sval:{PurePosixPath(buff).stem}"))
+        return [Script("DangerArea", sid, x, y, params=params)]
+
+    if t == "Checkpoint":
+        # AE respawns players at the LevelStart named by the current start id.
+        spawn_id = f"hw1_checkpoint_{n.id}"
+        ctx.level.scripts.append(Script("LevelStart", ctx.level.new_id(), x, y, label=spawn_id,
+                                        params=[Param("string", "StartID", spawn_id)]))
+        return [Script("SetRespawnPoint", sid, x, y, label=spawn_id,
+                       params=[Param("string", "SpawnId", spawn_id)])]
 
     if t == "DestroyObject":
         units = _feed(ctx, _ids(p, "static") + _ids(p, "object"))
@@ -312,6 +401,37 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
         use.connections.append((shop.id, 0))
         return [use, shop]
 
+    return None
+
+
+def _packed(params: sval.Node | None):
+    """The random dungeon generator writes single-value parameters packed:
+    ``<string name="parameters">actors/bat_1.xml</string>``. Their value, or
+    ``None`` for the usual parameters dictionary."""
+    if params is None or params.tag in ("dictionary", "dict"):
+        return None
+    return params.value
+
+
+_BOSS_EVENT = re.compile(r"^Boss (\d+)%$")
+
+
+def _boss_event(event: str, ctx: ScriptContext, sid: int, x: float, y: float) -> list[Script] | None:
+    """HW1 bosses broadcast "Boss 75%" ... "Boss Died". AE watches the boss
+    itself, as its own dragon level does: an ActorHealthTrigger per threshold
+    (health as a fraction) and a UnitDestroyedTrigger for the death."""
+    if not ctx.boss_ids:
+        return None
+    m = _BOSS_EVENT.match(event)
+    if m:
+        return [Script("ActorHealthTrigger", sid, x, y, label=event, params=[
+            Param("ids", "Units", list(ctx.boss_ids)),
+            Param("int", "Function", HEALTH_LESS),
+            Param("float", "Value", int(m.group(1)) / 100),
+        ])]
+    if event == "Boss Died":
+        return [Script("UnitDestroyedTrigger", sid, x, y, label=event,
+                       params=[Param("ids", "Units", list(ctx.boss_ids))])]
     return None
 
 

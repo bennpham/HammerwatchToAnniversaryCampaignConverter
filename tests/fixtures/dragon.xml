@@ -1,0 +1,143 @@
+<dictionary>
+<dictionary name="actors">
+<array name="actors"><dictionary>
+<int name="id">229</int>
+<string name="type">actors/boss_dragon/boss_dragon.xml</string>
+<float name="x">22.000000</float>
+<float name="y">3.000000</float>
+</dictionary>
+</array>
+</dictionary>
+<dictionary name="doodads">
+<array name="doodads"><dictionary>
+<int name="id">226</int>
+<string name="type">doodads/theme_a/a_h_16.xml</string>
+<float name="x">21.000000</float>
+<float name="y">29.000000</float>
+</dictionary>
+</array>
+</dictionary>
+<dictionary name="scripting">
+<array name="nodes">
+<dictionary>
+<int name="id">587</int>
+<string name="type">GlobalEventTrigger</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">22.500000</float>
+<float name="y">58.000000</float>
+<string name="parameters">Boss 75%</string>
+<int-arr name="connections">588 345</int-arr>
+<int-arr name="connection-delays">0 0</int-arr>
+</dictionary>
+<dictionary>
+<int name="id">588</int>
+<string name="type">ToggleImmortality</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">22.500000</float>
+<float name="y">59.000000</float>
+<dictionary name="parameters">
+<int name="state">0</int>
+<dictionary name="element">
+<int-arr name="static">229</int-arr>
+</dictionary>
+</dictionary>
+</dictionary>
+<dictionary>
+<int name="id">345</int>
+<string name="type">TimerTrigger</string>
+<bool name="enabled">False</bool>
+<int name="trigger-times">-1</int>
+<float name="x">22.500000</float>
+<float name="y">60.000000</float>
+<int name="parameters">1500</int>
+<int-arr name="connections">347</int-arr>
+<int-arr name="delays">347</int-arr>
+</dictionary>
+<dictionary>
+<int name="id">347</int>
+<string name="type">SpawnObject</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">6</int>
+<float name="x">42.000000</float>
+<float name="y">22.000000</float>
+<string name="parameters">actors/bat_1.xml</string>
+</dictionary>
+<dictionary>
+<int name="id">711</int>
+<string name="type">ProjectileSpewer</string>
+<bool name="enabled">False</bool>
+<int name="trigger-times">-1</int>
+<float name="x">26.500000</float>
+<float name="y">58.500000</float>
+<dictionary name="parameters">
+<int name="direction">1</int>
+<string name="projectile">projectiles/shooter_arrow.xml</string>
+<float name="spread">0.000000</float>
+<int name="spawn-rate">1000</int>
+</dictionary>
+</dictionary>
+<dictionary>
+<int name="id">689</int>
+<string name="type">RectangleShape</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">22.500000</float>
+<float name="y">29.500000</float>
+<dictionary name="parameters">
+<float name="w">47.000000</float>
+<float name="h">61.000000</float>
+<int name="types">2</int>
+</dictionary>
+</dictionary>
+<dictionary>
+<int name="id">690</int>
+<string name="type">DangerArea</string>
+<bool name="enabled">False</bool>
+<int name="trigger-times">-1</int>
+<float name="x">26.500000</float>
+<float name="y">58.000000</float>
+<dictionary name="parameters">
+<int name="damage">0</int>
+<dictionary name="shape">
+<int-arr name="static">689</int-arr>
+</dictionary>
+<int name="freq">100</int>
+<string name="buff">buffs/bloodlust.xml</string>
+</dictionary>
+</dictionary>
+<dictionary>
+<int name="id">816</int>
+<string name="type">Checkpoint</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">23.500000</float>
+<float name="y">59.000000</float>
+<bool name="parameters">True</bool>
+</dictionary>
+<dictionary>
+<int name="id">709</int>
+<string name="type">GlobalEventTrigger</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">22.000000</float>
+<float name="y">29.000000</float>
+<string name="parameters">Boss Died</string>
+<int-arr name="connections">710</int-arr>
+<int-arr name="delays">710</int-arr>
+</dictionary>
+<dictionary>
+<int name="id">710</int>
+<string name="type">DestroyObject</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">22.000000</float>
+<float name="y">29.000000</float>
+<dictionary name="parameters">
+<int-arr name="static">226</int-arr>
+</dictionary>
+</dictionary>
+</array>
+</dictionary>
+</dictionary>

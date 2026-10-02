@@ -242,6 +242,54 @@ def test_minibosses_are_mapped():
     assert r.resolve("actors/lich_1_mb.xml").path == "actors/undead/skeletons/hammerwatch/skeleton_wizard.unit"
 
 
+def test_dragon_fight_events():
+    # dungeon365496787's boss level, in the random dungeon generator's dialect.
+    from hw2ae.convert import Report, convert_level
+    lv = hw1_level.load(Path(__file__).parent / "fixtures" / "dragon.xml")
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    report = Report()
+    out = convert_level(lv, r, Path("does-not-exist"), report, lambda i: None)
+    dragon, = [u for u in out.units if u.path == "actors/bosses/boss_dragon/boss_dragon.unit"]
+    assert (dragon.x, dragon.y) == (22 * 16, 3 * 16 - 16)
+    by = {}
+    for s in out.scripts:
+        by.setdefault(s.cls, []).append(s)
+
+    # "Boss 75%" -> a one-shot health trigger on the dragon, as AE's dragon level does.
+    hp, = by["ActorHealthTrigger"]
+    assert hp.trigger_times == 1
+    assert Param("ids", "Units", [dragon.id]) in hp.params and Param("float", "Value", 0.75) in hp.params
+    imm, = by["ToggleImmortality"]
+    assert Param("int", "State", 1) in imm.params            # state 0: immortal through the countdown
+    assert Param("ids", "Units", [dragon.id]) in imm.params
+    timer, = by["TimerTrigger"]
+    spawn, = by["SpawnUnit"]
+    assert {t for t, _ in hp.connections} == {imm.id, timer.id}
+    assert Param("int", "Frequency", 1500) in timer.params and not timer.enabled
+    assert Param("string", "UnitType", "actors/beasts/bats/bat_black.unit") in spawn.params
+    assert spawn.trigger_times == 6
+
+    spewer, = by["ProjectileSpewer"]
+    assert Param("string", "Projectile", "doodads/generic/trap_shooter_arrow_projectile_normal.unit") in spewer.params
+    assert Param("int", "Direction", 90) in spewer.params and Param("int", "Frequency", 1000) in spewer.params
+    danger, = by["DangerArea"]
+    assert Param("string", "Buff", "actors/buffs.sval:bloodlust") in danger.params
+
+    # Checkpoint: a LevelStart to respawn at, set by SetRespawnPoint.
+    respawn, = by["SetRespawnPoint"]
+    starts = [s for s in by["LevelStart"] if s.params]
+    assert Param("string", "SpawnId", "hw1_checkpoint_816") in respawn.params
+    assert [Param("string", "StartID", "hw1_checkpoint_816")] == starts[0].params
+
+    # "Boss Died" opens the exit walls; the boss bar names the dragon.
+    died, = by["UnitDestroyedTrigger"]
+    destroy, = by["DestroyUnits"]
+    assert Param("ids", "Units", [dragon.id]) in died.params and died.connections[0][0] == destroy.id
+    bar, = by["CreateBossBar"]
+    assert bar.execute_on_start and Param("ids", "Actors", [dragon.id]) in bar.params
+    assert Param("string", "Name", ".ig.boss4") in bar.params
+
+
 def test_potion_vendor_opens_the_power_shop():
     from hw2ae import sval
     lv = hw1_level.load(FIX / "levels" / "level0.xml")
