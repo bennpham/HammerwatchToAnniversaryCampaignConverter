@@ -145,6 +145,11 @@ class Resolver:
         for name, dx, dy in cands:
             path = f"{folder}/{name}.unit"
             if self.assets.exists(path):
+                if theme.get("hw1_origins"):
+                    # The bonus themes kept HW1's pieces and origins (AE's own
+                    # bonus levels stack them exactly as HW1 does), so the
+                    # prison-measured offsets would tear their columns apart.
+                    dx = dy = 0
                 return Placement("unit", path, dx, dy, is_exit=name.startswith("exit_"))
         return None
 

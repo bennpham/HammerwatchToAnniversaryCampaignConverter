@@ -301,6 +301,17 @@ def test_potion_vendor_opens_the_power_shop():
     assert Param("int", "Type", 1) in shop.params
 
 
+def test_bonus_walls_keep_hw1_offsets():
+    # A v_16 column ending in v_cap_up left a 16-px walk-out gap in the bonus
+    # lobby: bonus pieces keep HW1's origins, unlike the prison walls measured.
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    assert r.resolve("doodads/theme_a/a_v_16.xml").dy == -16
+    for n in range(1, 6):
+        v = r.resolve(f"doodads/theme_bonus{n}/bonus{n}_v_16.xml")
+        cap = r.resolve(f"doodads/theme_bonus{n}/bonus{n}_v_cap_up.xml")
+        assert (v.dx, v.dy) == (cap.dx, cap.dy) == (0, 0)
+
+
 def test_blue_and_gold_ticks_stay_apart():
     # tick_1_elite (spiky blue) and tick_2 (gold) share 70 HP with AE's tick_gold.
     r = Resolver(AllExist())  # type: ignore[arg-type]
