@@ -274,6 +274,8 @@ def test_dragon_fight_events():
     assert Param("int", "Direction", 90) in spewer.params and Param("int", "Frequency", 1000) in spewer.params
     danger, = by["DangerArea"]
     assert Param("string", "Buff", "actors/buffs.sval:bloodlust") in danger.params
+    # The bloodlust zone's shape has types 2: enemies only, not the players.
+    assert Param("int", "Filter", 4) in danger.params
 
     # Checkpoint: a LevelStart to respawn at, set by SetRespawnPoint.
     respawn, = by["SetRespawnPoint"]
@@ -288,6 +290,32 @@ def test_dragon_fight_events():
     bar, = by["CreateBossBar"]
     assert bar.execute_on_start and Param("ids", "Actors", [dragon.id]) in bar.params
     assert Param("string", "Name", ".ig.boss4") in bar.params
+
+
+def test_danger_zone_targets_follow_the_hw1_shape():
+    from hw2ae import sval
+    lv = hw1_level.load(Path(__file__).parent / "fixtures" / "dragon.xml")
+    nodes = [n for n in lv.scripts if n.id in (689, 690)]
+    shape = next(n for n in nodes if n.id == 689)
+
+    def filter_for(types: str | None):
+        extra = f'<int name="types">{types}</int>' if types is not None else ""
+        shape.params = sval.parse_text(f'<dictionary><float name="w">4</float><float name="h">4</float>{extra}</dictionary>')
+        out = Level("DungeonGameMode", None)
+        convert_scripts(nodes, ScriptContext(out, {}, lambda i: None, warn=lambda m: None))
+        zone = next(s for s in out.scripts if s.cls == "DangerArea")
+        return next((p.value for p in zone.params if p.name == "Filter"), None)
+
+    assert filter_for("1") == 2       # players only: the final level's damage zone
+    assert filter_for("2") == 4       # enemies only: the boss room's bloodlust
+    assert filter_for("15") is None   # everything: AE's default
+    assert filter_for(None) is None
+
+
+def test_win_orb_is_a_pickup():
+    # The generator's last floor ends the game when this orb is picked up.
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    assert r.resolve("items/crystal_purple.xml").path == "items/pickups/collectable_10_sphere.unit"
 
 
 def test_potion_vendor_opens_the_power_shop():

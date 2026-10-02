@@ -107,7 +107,8 @@
   "items/chest_blue.xml": {"ae": "items/misc/chest_blue.unit"},
   "items/collectable_2.xml": {"ae": "items/pickups/collectable_1_plank.unit"},
   "items/trigger_button_save.xml": {"ae": "doodads/generic/button_save.unit"},
-  "items/crystal_purple.xml": {"drop": "HW1 value-0 collectable with no AE counterpart"},
+  "_crystal_purple": "A value-0 pickup HW1 scripts watch: the random dungeon generator's win orb (ObjectEventTrigger Destroyed -> GameEnd). AE's sphere collectable is likewise a walk-over pickup that is destroyed when collected.",
+  "items/crystal_purple.xml": {"ae": "items/pickups/collectable_10_sphere.unit"},
 
   "items/breakable_crate.xml": {"ae": "doodads/generic/containers/crate_wood_12x12.unit"},
   "items/breakable_crate_b.xml": {"ae": "doodads/generic/containers/crate_wood_16x16.unit"},
