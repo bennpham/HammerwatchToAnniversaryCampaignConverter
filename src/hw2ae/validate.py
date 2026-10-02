@@ -81,7 +81,8 @@ def validate(scenario_dir: Path, assets: AssetIndex) -> tuple[Problems, int]:
                     problems.add(f"{rel}: {s.cls} #{s.id} links to missing script #{t}")
             if s.params is not None:
                 for arr in s.params:
-                    if arr.tag == "array" and arr.name in ("Areas", "Units", "Scripts", "Doors", "OnAllEntered", "OnCanceled"):
+                    if arr.tag == "array" and arr.name in ("Areas", "Units", "Scripts", "Doors", "Actors",
+                                                                       "OnAllEntered", "OnCanceled"):
                         for c in arr:
                             if c.tag == "int" and c.value not in unit_ids | script_ids:
                                 problems.add(f"{rel}: {s.cls} #{s.id} {arr.name} refers to missing #{c.value}")

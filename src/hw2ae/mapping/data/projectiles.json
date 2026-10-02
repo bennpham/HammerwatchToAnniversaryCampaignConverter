@@ -1,0 +1,5 @@
+{
+  "_doc": "HW1 projectile (as a ProjectileSpewer names it) -> the AE projectile unit AE's own Castle Hammerwatch traps fire. A projectile missing here keeps its spewer as a plain ScriptLink and is reported.",
+  "projectiles/shooter_arrow.xml": "doodads/generic/trap_shooter_arrow_projectile_normal.unit",
+  "projectiles/shooter_fireball.xml": "doodads/generic/trap_shooter_fire_projectile_normal.unit"
+}

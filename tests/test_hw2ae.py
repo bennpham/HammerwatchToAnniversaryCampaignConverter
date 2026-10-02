@@ -209,6 +209,117 @@ def test_teleporter_pad_fires_sound_and_exit():
     assert Param("string", "Level", "levels/test/level0.lvl") in exit_.params
 
 
+def test_floor_button_and_level_music():
+    # dungeon1500735902 level 7, in the random dungeon generator's dialect.
+    lv = hw1_level.load(Path(__file__).parent / "fixtures" / "button_and_music.xml")
+    out = Level("DungeonGameMode", None)
+    walls = {67: 501, 68: 502, 69: 503}
+    ctx = ScriptContext(out, {**walls, 74: 510}, lambda i: None, warn=lambda m: None)
+    convert_scripts(lv.scripts, ctx)
+    by_cls: dict[str, list] = {}
+    for s in out.scripts:
+        by_cls.setdefault(s.cls, []).append(s)
+
+    # <string name="parameters">LevelLoaded</string> starts the level's music.
+    start, = by_cls["ScriptLink"]
+    music, ambience = by_cls["PlayMusic"]
+    assert start.execute_on_start and start.connections == [(music.id, 3521)]
+    assert Param("int", "Music", 4) in music.params          # act4: chambers
+    assert Param("bool", "Ambience", True) in ambience.params and music.connections == [(ambience.id, 0)]
+
+    # The button destroys the seal wall (ids in a bare int-arr) and shows as pressed.
+    trig, = by_cls["AreaTrigger"]
+    destroy, = by_cls["DestroyUnits"]
+    scene, = by_cls["SetUnitScene"]
+    assert Param("ids", "Units", [501, 502, 503]) in destroy.params
+    assert Param("ids", "Units", [510]) in scene.params and Param("string", "State", "pressed") in scene.params
+    assert {t for t, _ in trig.connections} == {destroy.id, scene.id}
+
+
+def test_minibosses_are_mapped():
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    assert r.resolve("actors/tick_1_mb.xml").path == "actors/beasts/ticks/tick_giant.unit"
+    assert r.resolve("actors/lich_1_mb.xml").path == "actors/undead/skeletons/hammerwatch/skeleton_wizard.unit"
+
+
+def test_dragon_fight_events():
+    # dungeon365496787's boss level, in the random dungeon generator's dialect.
+    from hw2ae.convert import Report, convert_level
+    lv = hw1_level.load(Path(__file__).parent / "fixtures" / "dragon.xml")
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    report = Report()
+    out = convert_level(lv, r, Path("does-not-exist"), report, lambda i: None)
+    dragon, = [u for u in out.units if u.path == "actors/bosses/boss_dragon/boss_dragon.unit"]
+    assert (dragon.x, dragon.y) == (22 * 16, 3 * 16 - 16)
+    by = {}
+    for s in out.scripts:
+        by.setdefault(s.cls, []).append(s)
+
+    # "Boss 75%" -> a one-shot health trigger on the dragon, as AE's dragon level does.
+    hp, = by["ActorHealthTrigger"]
+    assert hp.trigger_times == 1
+    assert Param("ids", "Units", [dragon.id]) in hp.params and Param("float", "Value", 0.75) in hp.params
+    imm, = by["ToggleImmortality"]
+    assert Param("int", "State", 1) in imm.params            # state 0: immortal through the countdown
+    assert Param("ids", "Units", [dragon.id]) in imm.params
+    timer, = by["TimerTrigger"]
+    spawn, = by["SpawnUnit"]
+    assert {t for t, _ in hp.connections} == {imm.id, timer.id}
+    assert Param("int", "Frequency", 1500) in timer.params and not timer.enabled
+    assert Param("string", "UnitType", "actors/beasts/bats/bat_black.unit") in spawn.params
+    assert spawn.trigger_times == 6
+
+    spewer, = by["ProjectileSpewer"]
+    assert Param("string", "Projectile", "doodads/generic/trap_shooter_arrow_projectile_normal.unit") in spewer.params
+    assert Param("int", "Direction", 90) in spewer.params and Param("int", "Frequency", 1000) in spewer.params
+    danger, = by["DangerArea"]
+    assert Param("string", "Buff", "actors/buffs.sval:bloodlust") in danger.params
+
+    # Checkpoint: a LevelStart to respawn at, set by SetRespawnPoint.
+    respawn, = by["SetRespawnPoint"]
+    starts = [s for s in by["LevelStart"] if s.params]
+    assert Param("string", "SpawnId", "hw1_checkpoint_816") in respawn.params
+    assert [Param("string", "StartID", "hw1_checkpoint_816")] == starts[0].params
+
+    # "Boss Died" opens the exit walls; the boss bar names the dragon.
+    died, = by["UnitDestroyedTrigger"]
+    destroy, = by["DestroyUnits"]
+    assert Param("ids", "Units", [dragon.id]) in died.params and died.connections[0][0] == destroy.id
+    bar, = by["CreateBossBar"]
+    assert bar.execute_on_start and Param("ids", "Actors", [dragon.id]) in bar.params
+    assert Param("string", "Name", ".ig.boss4") in bar.params
+
+
+def test_potion_vendor_opens_the_power_shop():
+    from hw2ae import sval
+    lv = hw1_level.load(FIX / "levels" / "level0.xml")
+    node = next(n for n in lv.scripts if n.type == "ShopArea")
+    node.params = sval.parse_text('<dictionary><string name="cats">power</string></dictionary>')
+    out = Level("DungeonGameMode", None)
+    convert_scripts([node], ScriptContext(out, {}, lambda i: None, warn=lambda m: None))
+    shop = next(s for s in out.scripts if s.cls == "ShopArea")
+    assert Param("int", "Type", 1) in shop.params
+
+
+def test_bonus_walls_keep_hw1_offsets():
+    # A v_16 column ending in v_cap_up left a 16-px walk-out gap in the bonus
+    # lobby: bonus pieces keep HW1's origins, unlike the prison walls measured.
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    assert r.resolve("doodads/theme_a/a_v_16.xml").dy == -16
+    for n in range(1, 6):
+        v = r.resolve(f"doodads/theme_bonus{n}/bonus{n}_v_16.xml")
+        cap = r.resolve(f"doodads/theme_bonus{n}/bonus{n}_v_cap_up.xml")
+        assert (v.dx, v.dy) == (cap.dx, cap.dy) == (0, 0)
+
+
+def test_blue_and_gold_ticks_stay_apart():
+    # tick_1_elite (spiky blue) and tick_2 (gold) share 70 HP with AE's tick_gold.
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    assert r.resolve("actors/tick_1_elite.xml").path == "actors/beasts/ticks/tick_elite.unit"
+    assert r.resolve("actors/tick_2.xml").path == "actors/beasts/ticks/tick_gold.unit"
+    assert r.resolve("actors/tick_2_small.xml").path == "actors/beasts/ticks/tick_gold_small.unit"
+
+
 # -- materials and ported HW1 art -----------------------------------------------
 
 def test_normalize_materials_fixes_units_from_any_tool(tmp_path):

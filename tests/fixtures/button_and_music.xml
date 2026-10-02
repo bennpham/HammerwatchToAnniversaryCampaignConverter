@@ -1,0 +1,83 @@
+<dictionary>
+<dictionary name="scripting">
+<array name="nodes">
+<dictionary>
+<int name="id">3520</int>
+<string name="type">GlobalEventTrigger</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">0.000000</float>
+<float name="y">0.000000</float>
+<string name="parameters">LevelLoaded</string>
+<int-arr name="connections">3521</int-arr>
+<int-arr name="delays">3521</int-arr>
+</dictionary>
+<dictionary>
+<int name="id">3521</int>
+<string name="type">PlayMusic</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">0.000000</float>
+<float name="y">0.000000</float>
+<dictionary name="parameters">
+<string name="sound">sound/music.xml:act4</string>
+<bool name="loop">True</bool>
+</dictionary>
+</dictionary>
+<dictionary>
+<int name="id">75</int>
+<string name="type">RectangleShape</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">26.348309</float>
+<float name="y">17.121437</float>
+<dictionary name="parameters">
+<float name="w">1</float>
+<float name="h">1</float>
+</dictionary>
+</dictionary>
+<dictionary>
+<int name="id">76</int>
+<string name="type">AreaTrigger</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">1</int>
+<float name="x">26.348309</float>
+<float name="y">17.121437</float>
+<dictionary name="parameters">
+<int name="event">0</int>
+<int name="types">1</int>
+<dictionary name="shape">
+<int-arr name="static">75</int-arr>
+</dictionary>
+</dictionary>
+<int-arr name="connections">78 80</int-arr>
+<int-arr name="delays">78 80</int-arr>
+</dictionary>
+<dictionary>
+<int name="id">78</int>
+<string name="type">DestroyObject</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">32.000000</float>
+<float name="y">5.000000</float>
+<dictionary name="parameters">
+<int-arr name="static">67 68 69</int-arr>
+</dictionary>
+</dictionary>
+<dictionary>
+<int name="id">80</int>
+<string name="type">ChangeDoodadState</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">26.348309</float>
+<float name="y">17.121437</float>
+<dictionary name="parameters">
+<string name="state">pressed</string>
+<dictionary name="object">
+<int-arr name="static">74</int-arr>
+</dictionary>
+</dictionary>
+</dictionary>
+</array>
+</dictionary>
+</dictionary>

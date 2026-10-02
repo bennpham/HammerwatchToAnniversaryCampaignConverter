@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import re
 import shutil
 import time
 from dataclasses import dataclass, field
@@ -31,6 +32,10 @@ EXIT_WIDTH = 64
 # stop 1 tile short of left/top walls but 2 short of bottom walls, and AE's
 # right-hand wall art sits further out than its left-hand art.
 BOTTOM_LAYER_GROW = (1, 1, 2, 2)
+# HW1 bosses (actors/boss_<x>/boss_<x>.xml) broadcast "Boss N%" events.
+BOSS_RE = re.compile(r"^actors/boss_[^/]+/boss_[^/]+\.xml$")
+# AE boss bar title per boss unit, as AE's own boss levels name them.
+BOSS_BAR_NAMES = {"actors/bosses/boss_dragon/boss_dragon.unit": ".ig.boss4"}
 # AE hard-codes the party's starting lives (PartyRecord.as); only the
 # NO_LIVES / DOUBLE_LIVES / INFINITE_LIVES modifiers change them.
 AE_LIVES = 2
@@ -124,6 +129,8 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
     id_map: dict[int, int] = {}
     exits: list[Unit] = []
     door_pieces = []
+    boss_ids: list[int] = []
+    boss_bar = ""
     for o in lv.all_objects():
         r = resolver.resolve(o.type)
         if r is None:
@@ -152,12 +159,25 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
         out.units.append(u)
         if r.is_exit:
             exits.append(u)
+        if BOSS_RE.match(o.type):
+            boss_ids.append(uid)
+            boss_bar = boss_bar or BOSS_BAR_NAMES.get(r.path, "")
 
     _clear_exit_spans(out, exits)
     doors.convert(_level_themed(door_pieces, theme, resolver), lv.doodads, out, id_map)
 
     # -- scripts -----------------------------------------------------------
-    ctx = ScriptContext(level=out, id_map=id_map, level_path_for=level_path_for, warn=report.warn)
+    def resolve_unit(hw1_type: str) -> str | None:
+        """AE unit for a HW1 object spawned by a script, as if it were placed."""
+        r = resolver.resolve(hw1_type)
+        if r is None:
+            return porter.port_unit(hw1_type) if porter else None
+        if isinstance(r, Placement) and r.kind == "unit" and r.door is None:
+            return r.path
+        return None
+
+    ctx = ScriptContext(level=out, id_map=id_map, level_path_for=level_path_for, warn=report.warn,
+                        boss_ids=boss_ids, boss_bar_name=boss_bar, resolve_unit=resolve_unit)
     convert_scripts(lv.scripts, ctx)
 
     report.units += len(out.units)
