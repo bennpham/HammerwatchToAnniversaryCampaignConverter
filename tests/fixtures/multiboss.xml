@@ -1,0 +1,172 @@
+<dictionary>
+<dictionary name="actors">
+<array name="actors"><dictionary>
+<int name="id">4079</int>
+<string name="type">actors/boss_anubis/boss_anubis.xml</string>
+<float name="x">23.000000</float>
+<float name="y">9.000000</float>
+</dictionary>
+<dictionary>
+<int name="id">4080</int>
+<string name="type">actors/boss_lich/boss_lich.xml</string>
+<float name="x">20.000000</float>
+<float name="y">11.000000</float>
+</dictionary>
+</array>
+</dictionary>
+<dictionary name="doodads">
+<array name="doodads"><dictionary>
+<int name="id">70</int>
+<string name="type">doodads/theme_c/c_h_8.xml</string>
+<float name="x">5.000000</float>
+<float name="y">42.000000</float>
+<bool name="need-sync">True</bool>
+</dictionary>
+</array>
+</dictionary>
+<dictionary name="scripting">
+<array name="nodes">
+<dictionary>
+<int name="id">4081</int>
+<string name="type">Variable</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">1</int>
+<float name="x">81.000000</float>
+<float name="y">0.000000</float>
+<int name="parameters">2</int>
+</dictionary>
+<dictionary>
+<int name="id">4082</int>
+<string name="type">ObjectEventTrigger</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">1</int>
+<float name="x">81.000000</float>
+<float name="y">1.000000</float>
+<dictionary name="parameters">
+<string name="event">Destroyed</string>
+<dictionary name="object">
+<int-arr name="static">4079</int-arr>
+</dictionary>
+
+</dictionary>
+
+<int-arr name="connections">4083 4084</int-arr>
+<int-arr name="delays">4083 4084</int-arr>
+</dictionary>
+<dictionary>
+<int name="id">4083</int>
+<string name="type">ChangeVariable</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">82.000000</float>
+<float name="y">1.000000</float>
+<dictionary name="parameters">
+<dictionary name="vars">
+<int-arr name="static">4081</int-arr>
+</dictionary>
+
+<int name="mod">2</int>
+<int name="round">0</int>
+<int name="value">1</int>
+</dictionary>
+
+</dictionary>
+<dictionary>
+<int name="id">4084</int>
+<string name="type">CheckVariable</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">83.000000</float>
+<float name="y">1.000000</float>
+<dictionary name="parameters">
+<dictionary name="vars">
+<int-arr name="static">4081</int-arr>
+</dictionary>
+
+<int name="cmp-func">0</int>
+<int name="cmp-val">0</int>
+<dictionary name="on-true">
+<int-arr name="static">4098 4105 4106 4107</int-arr>
+</dictionary>
+
+<dictionary name="on-false">
+</dictionary>
+
+</dictionary>
+
+</dictionary>
+<dictionary>
+<int name="id">4085</int>
+<string name="type">ObjectEventTrigger</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">1</int>
+<float name="x">81.000000</float>
+<float name="y">2.000000</float>
+<dictionary name="parameters">
+<string name="event">Destroyed</string>
+<dictionary name="object">
+<int-arr name="static">4080</int-arr>
+</dictionary>
+
+</dictionary>
+
+<int-arr name="connections">4086 4087</int-arr>
+<int-arr name="delays">4086 4087</int-arr>
+</dictionary>
+<dictionary>
+<int name="id">4086</int>
+<string name="type">ChangeVariable</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">82.000000</float>
+<float name="y">2.000000</float>
+<dictionary name="parameters">
+<dictionary name="vars">
+<int-arr name="static">4081</int-arr>
+</dictionary>
+
+<int name="mod">2</int>
+<int name="round">0</int>
+<int name="value">1</int>
+</dictionary>
+
+</dictionary>
+<dictionary>
+<int name="id">4087</int>
+<string name="type">CheckVariable</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">83.000000</float>
+<float name="y">2.000000</float>
+<dictionary name="parameters">
+<dictionary name="vars">
+<int-arr name="static">4081</int-arr>
+</dictionary>
+
+<int name="cmp-func">0</int>
+<int name="cmp-val">0</int>
+<dictionary name="on-true">
+<int-arr name="static">4098 4105 4106 4107</int-arr>
+</dictionary>
+
+<dictionary name="on-false">
+</dictionary>
+
+</dictionary>
+
+</dictionary>
+<dictionary>
+<int name="id">4106</int>
+<string name="type">DestroyObject</string>
+<bool name="enabled">True</bool>
+<int name="trigger-times">-1</int>
+<float name="x">8.000000</float>
+<float name="y">40.000000</float>
+<dictionary name="parameters">
+<int-arr name="static">70 71 72 73 74 75</int-arr>
+</dictionary>
+
+</dictionary>
+</array>
+</dictionary>
+</dictionary>

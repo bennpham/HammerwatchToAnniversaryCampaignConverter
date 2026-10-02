@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import collections
 import dataclasses
-import re
 import shutil
 import time
 from dataclasses import dataclass, field
@@ -32,10 +31,17 @@ EXIT_WIDTH = 64
 # stop 1 tile short of left/top walls but 2 short of bottom walls, and AE's
 # right-hand wall art sits further out than its left-hand art.
 BOTTOM_LAYER_GROW = (1, 1, 2, 2)
-# HW1 bosses (actors/boss_<x>/boss_<x>.xml) broadcast "Boss N%" events.
-BOSS_RE = re.compile(r"^actors/boss_[^/]+/boss_[^/]+\.xml$")
-# AE boss bar title per boss unit, as AE's own boss levels name them.
-BOSS_BAR_NAMES = {"actors/bosses/boss_dragon/boss_dragon.unit": ".ig.boss4"}
+# AE boss units, each with its boss bar title as AE's own boss levels name it
+# (beastiary.lang). HW1 bosses broadcast "Boss N%" events; AE watches these.
+BOSS_BAR_NAMES = {
+    "actors/bosses/boss_dragon/boss_dragon.unit": ".ig.boss4",
+    "actors/bosses/boss_knight/boss_knight.unit": ".ig.boss2",
+    "actors/bosses/boss_lich/boss_lich.unit": ".ig.boss3",
+    "actors/bosses/boss_worm/boss_worm.unit": ".d.ig.boss_1",
+    "actors/bosses/boss_worm/boss_worm_key.unit": ".d.ig.boss_1",
+    "actors/bosses/boss_krilith/boss_krilith.unit": ".d.ig.boss_2",
+    "actors/bosses/boss_anubis/boss_anubis.unit": ".d.ig.boss_3",
+}
 # AE hard-codes the party's starting lives (PartyRecord.as); only the
 # NO_LIVES / DOUBLE_LIVES / INFINITE_LIVES modifiers change them.
 AE_LIVES = 2
@@ -129,8 +135,7 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
     id_map: dict[int, int] = {}
     exits: list[Unit] = []
     door_pieces = []
-    boss_ids: list[int] = []
-    boss_bar = ""
+    bosses: list[tuple[int, str]] = []  # (AE id, boss bar title)
     for o in lv.all_objects():
         r = resolver.resolve(o.type)
         if r is None:
@@ -159,9 +164,8 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
         out.units.append(u)
         if r.is_exit:
             exits.append(u)
-        if BOSS_RE.match(o.type):
-            boss_ids.append(uid)
-            boss_bar = boss_bar or BOSS_BAR_NAMES.get(r.path, "")
+        if r.path in BOSS_BAR_NAMES:
+            bosses.append((uid, BOSS_BAR_NAMES[r.path]))
 
     _clear_exit_spans(out, exits)
     doors.convert(_level_themed(door_pieces, theme, resolver), lv.doodads, out, id_map)
@@ -177,7 +181,7 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
         return None
 
     ctx = ScriptContext(level=out, id_map=id_map, level_path_for=level_path_for, warn=report.warn,
-                        boss_ids=boss_ids, boss_bar_name=boss_bar, resolve_unit=resolve_unit)
+                        bosses=bosses, resolve_unit=resolve_unit)
     convert_scripts(lv.scripts, ctx)
 
     report.units += len(out.units)

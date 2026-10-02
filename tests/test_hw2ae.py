@@ -223,7 +223,8 @@ def test_floor_button_and_level_music():
     # <string name="parameters">LevelLoaded</string> starts the level's music.
     start, = by_cls["ScriptLink"]
     music, ambience = by_cls["PlayMusic"]
-    assert start.execute_on_start and start.connections == [(music.id, 3521)]
+    # Its <int-arr name="delays">3521</int-arr> is the target's id, not a time.
+    assert start.execute_on_start and start.connections == [(music.id, 0)]
     assert Param("int", "Music", 4) in music.params          # act4: chambers
     assert Param("bool", "Ambience", True) in ambience.params and music.connections == [(ambience.id, 0)]
 
@@ -290,6 +291,51 @@ def test_dragon_fight_events():
     bar, = by["CreateBossBar"]
     assert bar.execute_on_start and Param("ids", "Actors", [dragon.id]) in bar.params
     assert Param("string", "Name", ".ig.boss4") in bar.params
+
+
+def test_bosses_and_upgrades_are_mapped():
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    for boss in ("knight", "lich", "krilith", "worm", "anubis"):
+        assert r.resolve(f"actors/boss_{boss}/boss_{boss}.xml").path == f"actors/bosses/boss_{boss}/boss_{boss}.unit"
+    for up in ("damage", "defense", "damage_2", "defense_2", "health_2", "mana_2"):
+        assert r.resolve(f"items/upgrade_{up}.xml").path == f"items/pickups/upgrade_{up}.unit"
+
+
+def test_multi_boss_counter_opens_the_gate():
+    # dungeon239628003's level0: two bosses count a Variable down to 0, which opens the exit.
+    from hw2ae.convert import Report, convert_level
+    lv = hw1_level.load(Path(__file__).parent / "fixtures" / "multiboss.xml")
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    out = convert_level(lv, r, Path("does-not-exist"), Report(), lambda i: None)
+    anubis, = [u for u in out.units if u.path == "actors/bosses/boss_anubis/boss_anubis.unit"]
+    lich, = [u for u in out.units if u.path == "actors/bosses/boss_lich/boss_lich.unit"]
+    by = {}
+    for s in out.scripts:
+        by.setdefault(s.cls, []).append(s)
+
+    var, = by["Variable"]
+    assert Param("int", "Value", 2) in var.params
+    died = {s.params[0].value[0]: s for s in by["UnitDestroyedTrigger"]}
+    assert set(died) == {anubis.id, lich.id}
+    destroy, = by["DestroyUnits"]
+    for trig in died.values():
+        # The generator's "delays" are its connection ids, not times; the check
+        # runs 50 ms after the change, as AE's own counters do.
+        (change, d1), (check, d2) = trig.connections
+        assert (d1, d2) == (0, 50)
+        change = next(s for s in by["ChangeVariables"] if s.id == change)
+        check = next(s for s in by["CheckVariables"] if s.id == check)
+        assert Param("int", "Function", 3) in change.params and Param("int", "Value", 1) in change.params
+        assert Param("ids", "Variables", [var.id]) in change.params
+        assert Param("int", "Function", 1) in check.params and Param("int", "Value", 0) in check.params
+        assert Param("ids", "Variable", [var.id]) in check.params
+        on_true = next(p.value for p in check.params if p.name == "OnTrue")
+        assert destroy.id in on_true
+
+    # One bar per kind of boss, each with its own title.
+    bars = {next(p.value for p in b.params if p.name == "Name"): b for b in by["CreateBossBar"]}
+    assert set(bars) == {".d.ig.boss_3", ".ig.boss3"}
+    assert Param("ids", "Actors", [anubis.id]) in bars[".d.ig.boss_3"].params
 
 
 def test_danger_zone_targets_follow_the_hw1_shape():

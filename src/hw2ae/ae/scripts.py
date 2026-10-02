@@ -12,8 +12,11 @@ most nodes translate one to one. The differences handled here:
 * ``PlayMusic`` sets AE's ``MusicMode`` (and ``AmbienceMode``) from the same file.
 * ``DestroyObject`` is ``DestroyUnits``; ``ChangeDoodadState`` is ``SetUnitScene``.
 * A boss's "Boss N%" / "Boss Died" global events become an ``ActorHealthTrigger``
-  / ``UnitDestroyedTrigger`` on the boss, plus a ``CreateBossBar``, as in AE's
-  own dragon level.
+  / ``UnitDestroyedTrigger`` on the boss, plus a ``CreateBossBar`` per kind of
+  boss, as in AE's own dragon level.
+* ``Variable`` / ``ChangeVariable`` / ``CheckVariable`` are AE's ``Variable`` /
+  ``ChangeVariables`` / ``CheckVariables``: the generator counts boss deaths
+  down to 0 with them to open a multi-boss room.
 * ``SpawnObject``, ``TimerTrigger``, ``ToggleImmortality``, ``ProjectileSpewer``
   and ``DangerArea`` have AE scripts of the same purpose; ``Checkpoint`` is a
   ``LevelStart`` plus a ``SetRespawnPoint`` to it. The random dungeon generator
@@ -64,6 +67,17 @@ PROJECTILES: dict[str, str] = {k: v for k, v in json.loads(
 SPEWER_DIRECTIONS = {0: 270, 1: 90, 2: 180, 3: 0}
 # FloatCompareFunc.Less, ActorHealthTrigger's default in AE's levels.
 HEALTH_LESS = 2
+
+# HW1 ChangeVariable ``mod`` -> AE ChangeFunc. 0 set (Temple of the Sun resets
+# its counters to 0), 1 add (its worm spawns count up), 2 subtract (the
+# generator's boss countdown, played through).
+CHANGE_FUNCS = {0: 1, 1: 2, 2: 3}
+# HW1 CheckVariable ``cmp-func`` -> AE CompareFunc. Only 0 (equals) is known:
+# the generator's "all bosses dead" check, played through. Temple of the Sun's
+# 2/3/4 cap its spawns but don't show whether they are strict or inclusive.
+COMPARE_FUNCS = {0: 1}
+# How long AE's Castle levels wait after a ChangeVariables before checking it.
+CHECK_AFTER_CHANGE_MS = 50
 
 # DangerArea's DamageFilter: Neutral 1 | Player 2 | Enemy 4 | Other 64 (its default).
 DAMAGE_FILTER_ALL = 71
@@ -116,13 +130,16 @@ class ScriptContext:
     level_path_for: Callable[[str], str | None]  # HW1 level id -> AE .lvl path
     warn: Callable[[str], None]
     dropped: set[int] = field(default_factory=set)
-    # AE ids of the level's boss actors, which fire HW1's "Boss N%" events.
-    boss_ids: list[int] = field(default_factory=list)
-    boss_bar_name: str = ""
+    # (AE id, boss bar title) of the level's boss actors, which fire HW1's "Boss N%" events.
+    bosses: list[tuple[int, str]] = field(default_factory=list)
     # HW1 object type -> AE unit path, as placed objects resolve (SpawnObject).
     resolve_unit: Callable[[str], str | None] = lambda hw1_type: None
     # The level's HW1 script nodes by id, for nodes that read another's params.
     nodes: dict[int, ScriptNode] = field(default_factory=dict)
+
+    @property
+    def boss_ids(self) -> list[int]:
+        return [uid for uid, _ in self.bosses]
 
 
 def convert_scripts(nodes: list[ScriptNode], ctx: ScriptContext) -> None:
@@ -172,6 +189,7 @@ def convert_scripts(nodes: list[ScriptNode], ctx: ScriptContext) -> None:
             if t is None or target not in by_id:
                 continue
             links.append((t, int(delay)))
+        links = _check_after_change(n, links, by_id, ctx)
         feed = FEED_LINKS.get(last.cls)
         if feed:
             last.params.append(Param("ids", feed, [t for t, _ in links]))
@@ -180,10 +198,15 @@ def convert_scripts(nodes: list[ScriptNode], ctx: ScriptContext) -> None:
         else:
             last.connections.extend(links)
         lv.scripts.extend(made)
-    if ctx.boss_ids:
+    # AE draws a bar per actor, each titled with the Name it was created with,
+    # so a room of mixed bosses gets one CreateBossBar per kind of boss.
+    by_name: dict[str, list[int]] = {}
+    for uid, name in ctx.bosses:
+        by_name.setdefault(name, []).append(uid)
+    for name, ids in by_name.items():
         lv.scripts.append(Script("CreateBossBar", lv.new_id(), 0, 0, execute_on_start=True, params=[
-            Param("ids", "Actors", list(ctx.boss_ids)),
-            Param("string", "Name", ctx.boss_bar_name),
+            Param("ids", "Actors", ids),
+            Param("string", "Name", name),
         ]))
     for t, k in sorted(unsupported.items()):
         ctx.warn(f"unsupported script node '{t}' x{k}; kept as a plain ScriptLink so its links still fire")
@@ -191,6 +214,20 @@ def convert_scripts(nodes: list[ScriptNode], ctx: ScriptContext) -> None:
     if respawns:
         ctx.warn(f"RespawnPlayers x{respawns} left out: AE has no world script that revives players "
                  "(they come back through AE's lives)")
+
+
+def _check_after_change(n: ScriptNode, links: list[tuple[int, int]], by_id: dict[int, ScriptNode],
+                        ctx: ScriptContext) -> list[tuple[int, int]]:
+    """A HW1 node that fires a ChangeVariable and a CheckVariable together
+    (the generator's boss countdown) relies on the change landing first. AE's
+    own levels never fire both at once: the check is chained from the change or
+    runs 50 ms after it (Castle level_2), so do the same."""
+    aes = {ctx.id_map.get(i): by_id[i].type for i in n.connections if i in by_id}
+    changes = [d for t, d in links if aes.get(t) == "ChangeVariable"]
+    if not changes:
+        return links
+    after = max(changes) + CHECK_AFTER_CHANGE_MS
+    return [(t, max(d, after)) if aes.get(t) == "CheckVariable" else (t, d) for t, d in links]
 
 
 def _physics_state(extra: dict) -> dict:
@@ -411,6 +448,38 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
             shop.params.append(Param("int", "Type", SHOP_TYPE_POWER))
         use.connections.append((shop.id, 0))
         return [use, shop]
+
+    if t == "Variable":
+        # Both the HW1 editor and the generator pack the start value.
+        value = _packed(p) if _packed(p) is not None else _val(p, "value", 0)
+        return [Script("Variable", sid, x, y, label=str(value), params=[Param("int", "Value", int(value))])]
+
+    if t == "ChangeVariable":
+        mod = int(_val(p, "mod", 0))
+        func = CHANGE_FUNCS.get(mod)
+        if func is None:
+            ctx.warn(f"ChangeVariable mod {mod} has no known AE function; kept as a plain ScriptLink")
+            return [Script("ScriptLink", sid, x, y)]
+        return [Script("ChangeVariables", sid, x, y, params=[
+            Param("int", "Function", func),
+            Param("int", "Value", int(_val(p, "value", 0))),
+            Param("ids", "Variables", _feed(ctx, _ids(p, "vars"))),
+        ])]
+
+    if t == "CheckVariable":
+        cmp = int(_val(p, "cmp-func", 0))
+        func = COMPARE_FUNCS.get(cmp)
+        if func is None:
+            ctx.warn(f"CheckVariable cmp-func {cmp} has no known AE comparison; kept as a plain ScriptLink")
+            return [Script("ScriptLink", sid, x, y)]
+        # HW1 fires on-true / on-false instead of its links; AE does the same.
+        return [Script("CheckVariables", sid, x, y, params=[
+            Param("int", "Function", func),
+            Param("int", "Value", int(_val(p, "cmp-val", 0))),
+            Param("ids", "Variable", _feed(ctx, _ids(p, "vars"))[:1]),
+            Param("ids", "OnTrue", _feed(ctx, _ids(p, "on-true"))),
+            Param("ids", "OnFalse", _feed(ctx, _ids(p, "on-false"))),
+        ])]
 
     return None
 
