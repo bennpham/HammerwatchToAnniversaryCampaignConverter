@@ -154,9 +154,11 @@ def _scripts(section: sval.Node | None) -> list[ScriptNode]:
     for d in nodes:
         x, y = _pos(d)
         conns = d.get("connections")
+        # HW1 times links by "connection-delays". The random dungeon generator
+        # also writes "delays" as a copy of the connection ids, not times; it
+        # writes real delays under both names (HammerwatchRogueLikeDungeon-
+        # GeneratorRemake: ScriptNode.connectTo), so "delays" alone is no delay.
         delays = d.get("connection-delays")
-        if delays is None:
-            delays = d.get("delays")
         enabled = d.get("enabled")
         tt = d.get("trigger-times")
         c = conns.value if conns is not None else []

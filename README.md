@@ -74,6 +74,12 @@ correspondences and pixel offsets.
   the walls above and below.
 - **Enemies** are matched on identical hit points (e.g. `skeleton_1_small` → `skeleton_warrior_weak`,
   `lich_3` → `skeleton_necromancer`, `tick_1_elite` → `tick_gold`).
+- **Bosses.** All six HW1 bosses (dragon, knight, lich, krilith, worm, anubis) map to the
+  same-named AE boss and fight without level scripts. Each kind of boss in a level gets its
+  own AE boss bar, titled as AE's campaigns title it. "Boss N%" / "Boss Died" become health and
+  death triggers on the bosses, and the generator's multi-boss countdown (`Variable` /
+  `ChangeVariable` / `CheckVariable`) becomes AE's `Variable` / `ChangeVariables` /
+  `CheckVariables`.
 - **Shops**: a `vendor_*` doodad becomes the matching AE shop unit
   (`doodads/generic/shop_defense.unit`, …), and HW1's `ShopArea` a `UseTrigger` on its area
   feeding an AE `ShopArea`, as Castle Hammerwatch wires them. The categories line up exactly
