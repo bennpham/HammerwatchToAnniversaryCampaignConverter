@@ -65,6 +65,32 @@ def normalize_materials(scenario_dir: Path) -> int:
     return changed
 
 
+def _pow2(n: int) -> int:
+    return 1 << max(0, n - 1).bit_length()
+
+
+def pad_textures(scenario_dir: Path) -> int | None:
+    """Pad every ported PNG to power-of-two sides, which AE's texture loader
+    requires (HW1 took any size). The art stays at the top left, so the pixel
+    frames and tiles that point into it are unchanged. Returns the files
+    padded, or None without Pillow."""
+    try:
+        from PIL import Image
+    except ImportError:
+        return None
+    padded = 0
+    for f in (scenario_dir / PORTED_ROOT).rglob("*.png"):
+        with Image.open(f) as im:
+            w, h = im.size
+            if (w, h) == (_pow2(w), _pow2(h)):
+                continue
+            out = Image.new("RGBA", (_pow2(w), _pow2(h)), (0, 0, 0, 0))
+            out.paste(im.convert("RGBA"), (0, 0))
+        out.save(f)
+        padded += 1
+    return padded
+
+
 class Porter:
     """Converts HW1 doodads and tilesets on demand; one per scenario."""
 
@@ -115,9 +141,29 @@ class Porter:
         except ConversionError as e:
             self._warn(f"porting HW1 art: {key}: {e}")
             return None
+        if ext == "unit":
+            self._apply_scale(Path(str(source)), self.out_dir / target)
         ae_path = self.prefix + target
         self._done[key] = self.ported[key] = ae_path
         return ae_path
+
+
+    def _apply_scale(self, source: Path, unit: Path) -> None:
+        """HW1 draws a doodad at 16/scale of its texture, collision included;
+        HW2A000FF copies the coordinates as they are."""
+        from .scale import hw1_scale, scale_unit, scaled_texture
+        try:
+            f = hw1_scale(source.read_text(encoding="utf-8-sig", errors="replace"))
+        except OSError:
+            return
+        if f == 1.0 or not unit.exists():
+            return
+
+        def texture(path: str) -> str:
+            scaled = scaled_texture(self.scenario_dir / path, f) if (self.scenario_dir / path).exists() else None
+            return scaled.relative_to(self.scenario_dir).as_posix() if scaled else path
+
+        unit.write_text(scale_unit(unit.read_text(encoding="utf-8"), f, texture), encoding="utf-8", newline="")
 
 
 def make_porter(mission_root: Path, hw1_assets: Path | None, scenario_dir: Path, name_id: str,

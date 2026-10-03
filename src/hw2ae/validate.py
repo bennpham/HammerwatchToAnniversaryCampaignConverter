@@ -5,6 +5,7 @@ plus broken script wiring and level exits that lead nowhere."""
 
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -41,10 +42,15 @@ def validate(scenario_dir: Path, assets: AssetIndex) -> tuple[Problems, int]:
     # Units shipped in the scenario (ported HW1 art, or added by hand) must use
     # AE's materials; HoH's system/hammerwatch.mats isn't in AE.
     for f in sorted(scenario_dir.rglob("*")):
-        if f.suffix.lower() in (".unit", ".tileset") and f.is_file():
-            if hwr_materials_refs(f.read_text(encoding="utf-8", errors="replace")):
-                problems.add(f"{f.relative_to(scenario_dir).as_posix()}: uses system/hammerwatch.mats, "
+        if f.suffix.lower() in (".unit", ".tileset", ".sval") and f.is_file():
+            text = f.read_text(encoding="utf-8", errors="replace")
+            rel = f.relative_to(scenario_dir).as_posix()
+            if hwr_materials_refs(text):
+                problems.add(f"{rel}: uses system/hammerwatch.mats, "
                              "which AE doesn't ship (packing rewrites it to system/default.mats)")
+            err = _xml_error(text)
+            if err:
+                problems.add(f"{rel}: not well-formed, AE would refuse to load it ({err})")
 
     loaded = {f.relative_to(scenario_dir).as_posix().lower(): level_reader.load(f) for f in levels}
     start_ids = {rel: {_start_id(s) for s in lv.scripts if s.cls == "LevelStart"}
@@ -111,6 +117,43 @@ def validate(scenario_dir: Path, assets: AssetIndex) -> tuple[Problems, int]:
             problems.add(f"{start}: start level has no default LevelStart (one without a StartID); "
                          "a new game spawns players at 0,0")
     return problems, len(levels)
+
+
+def _xml_error(text: str) -> str | None:
+    """Why AE's loader would reject a unit/sval, or None. Its ``%`` lines are
+    preprocessor directives and its strings hold bare ``&``; both are fine.
+    Only the first branch of each ``%if`` is kept, as one branch is all AE
+    sees (AE's own bat opens ``<unit>`` once per difficulty branch)."""
+    keep: list[bool] = []
+    lines = []
+    for line in text.splitlines():
+        d = line.lstrip()
+        if d.startswith("%if"):
+            keep.append(True)
+        elif d.startswith(("%else", "%elif")) and keep:
+            keep[-1] = False
+        elif d.startswith("%endif") and keep:
+            keep.pop()
+        elif not d.startswith("%") and all(keep):
+            lines.append(line)
+    # AE's parser takes loose attributes (``0="0"``, ``"a"b="c"``), so only
+    # the nesting is checked: an unclosed or stray tag is what it rejects.
+    body = re.sub(r"<!--.*?-->", "", "\n".join(lines), flags=re.S)
+    stack: list[tuple[str, int]] = []
+    for m in re.finditer(r"<(/?)([A-Za-z_][\w.:-]*)[^>]*?(/?)>", body):
+        close, tag, empty = m.group(1), m.group(2), m.group(3)
+        line = body.count("\n", 0, m.start()) + 1
+        if empty:
+            continue
+        if not close:
+            stack.append((tag, line))
+        elif not stack:
+            return f"line {line}: </{tag}> closes nothing"
+        elif stack[-1][0] != tag:
+            return f"line {line}: </{tag}> closes <{stack[-1][0]}> from line {stack[-1][1]}"
+        else:
+            stack.pop()
+    return f"<{stack[-1][0]}> from line {stack[-1][1]} is never closed" if stack else None
 
 
 def _start_levels(scenario_dir: Path) -> list[str]:

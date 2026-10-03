@@ -11,13 +11,14 @@ from pathlib import Path, PurePosixPath
 
 from .ae import doors, level_writer, players, scenario
 from .ae.assets import AssetIndex
+from .ae.custom import CustomUnits
 from .ae.model import Level, PrefabPlacement, Unit
-from .ae.scripts import ScriptContext, convert_scripts
+from .ae.scripts import DIALOG_FILE, ScriptContext, convert_scripts, dialog_file
 from .ae.tiles import TileLayers
 from .hw1 import campaign as hw1_campaign
 from .hw1 import level as hw1_level
 from .hw1 import tweak as hw1_tweak
-from .hw1port import Porter, make_porter, normalize_materials
+from .hw1port import PORTED_ROOT, Porter, make_porter, normalize_materials, pad_textures
 from .mapping.resolver import Dropped, Placement, Resolver
 
 TILE = 16
@@ -45,7 +46,7 @@ BOSS_BAR_NAMES = {
 }
 # Stock AE files a scenario overrides by shipping its own copy at the same
 # path. Ours alone, so they are rebuilt from scratch on every run.
-OVERRIDE_DIRS = ("players", "scripts")
+OVERRIDE_DIRS = ("players", "scripts", "tweak")
 LIVES_SCRIPT = "scripts/Modules/PartyRecord.as"
 POWER_SHOP_SCRIPT = "scripts/GUI/Shop/PowerShopMenuContent.as"
 
@@ -109,7 +110,8 @@ def _environment(lv: hw1_level.Level, theme: str | None, resolver: Resolver, lig
 
 
 def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, report: Report,
-                  level_path_for, lighting: str = "hw1", porter: Porter | None = None) -> Level:
+                  level_path_for, lighting: str = "hw1", porter: Porter | None = None,
+                  custom: CustomUnits | None = None, dialogs: list | None = None, name_id: str = "hw1") -> Level:
     theme = _dominant_theme(lv, resolver)
     out = Level(game_mode="DungeonGameMode", environment=_environment(lv, theme, resolver, lighting))
     if lv.lights:
@@ -143,13 +145,12 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
     for o in lv.all_objects():
         r = resolver.resolve(o.type)
         if r is None:
-            ported = porter.port_unit(o.type) if porter else None
+            ported = _custom_or_ported(o.type, custom, porter, report)
             if ported is None:
                 report.unmapped[o.type] += 1
                 continue
             # A ported unit keeps HW1's sprite origin: no offset.
             r = Placement("unit", ported)
-            report.ported[o.type] += 1
         if isinstance(r, Dropped):
             report.dropped[f"{o.type} ({r.reason})"] += 1
             continue
@@ -170,6 +171,8 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
             exits.append(u)
         if r.path in BOSS_BAR_NAMES:
             bosses.append((uid, BOSS_BAR_NAMES[r.path]))
+        elif custom is not None and (title := custom.boss_title(o.type)) is not None:
+            bosses.append((uid, title))
 
     _clear_exit_spans(out, exits)
     doors.convert(_level_themed(door_pieces, theme, resolver), lv.doodads, out, id_map)
@@ -179,18 +182,37 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
         """AE unit for a HW1 object spawned by a script, as if it were placed."""
         r = resolver.resolve(hw1_type)
         if r is None:
-            return porter.port_unit(hw1_type) if porter else None
+            return _custom_or_ported(hw1_type, custom, porter, report)
         if isinstance(r, Placement) and r.kind == "unit" and r.door is None:
             return r.path
         return None
 
     ctx = ScriptContext(level=out, id_map=id_map, level_path_for=level_path_for, warn=report.warn,
-                        bosses=bosses, resolve_unit=resolve_unit)
+                        bosses=bosses, resolve_unit=resolve_unit, dialog_prefix=name_id,
+                        boss_title=custom.boss_title if custom is not None else (lambda hw1_type: None))
+    if dialogs is not None:
+        ctx.dialogs = dialogs  # shared by every level of the scenario
     convert_scripts(lv.scripts, ctx)
 
     report.units += len(out.units)
     report.scripts += len(out.scripts)
     return out
+
+
+def _custom_or_ported(hw1_type: str, custom: CustomUnits | None, porter: Porter | None,
+                      report: Report | None) -> str | None:
+    """The scenario's unit for HW1 art AE has no mapping for: a mission's own
+    item or actor on its AE twin, else a ported doodad."""
+    unit = custom.unit(hw1_type) if custom is not None else None
+    if unit is not None:
+        if report is not None:
+            made = custom.made[hw1_type.replace("\\", "/")]
+            report.ported[f"{hw1_type} (as {made.twin}: {made.note})"] += 1
+        return unit
+    unit = porter.port_unit(hw1_type) if porter is not None else None
+    if unit is not None and report is not None:
+        report.ported[hw1_type] += 1
+    return unit
 
 
 def _level_themed(pieces, theme: str | None, resolver: Resolver):
@@ -247,9 +269,10 @@ def convert(opts: Options) -> Report:
         return paths.get(level_id)
 
     porter = make_porter(camp.root, opts.hw1_assets, opts.out, name_id, report.warn)
-    if porter is not None:
-        # Ours alone, and rebuilt every run: a stale texture would otherwise stay.
-        shutil.rmtree(porter.out_dir, ignore_errors=True)
+    # Ours alone, and rebuilt every run: a stale texture would otherwise stay.
+    shutil.rmtree(opts.out / PORTED_ROOT / name_id, ignore_errors=True)
+    custom = CustomUnits(camp.root, opts.hw1_assets, opts.ae_assets, opts.out, name_id, resolver.units, report.warn)
+    dialogs: list[tuple[str, str]] = []
 
     for entry in camp.levels:
         src = camp.root / entry.res
@@ -257,7 +280,8 @@ def convert(opts: Options) -> Report:
             report.warn(f"level '{entry.id}' file is missing: {src}")
             continue
         lv = hw1_level.load(src)
-        ae_level = convert_level(lv, resolver, opts.ae_assets, report, level_path_for, opts.lighting, porter)
+        ae_level = convert_level(lv, resolver, opts.ae_assets, report, level_path_for, opts.lighting, porter,
+                                 custom, dialogs, name_id)
         dst = opts.out / paths[entry.id]
         level_writer.write(ae_level, dst)
         report.levels += 1
@@ -265,9 +289,17 @@ def convert(opts: Options) -> Report:
             f"{len(ae_level.scripts)} scripts, {len(ae_level.tile_cells)} tile cells)")
 
     _convert_players(camp, opts, report)
+    if dialogs:
+        # HW1 speech bubbles are AE dialog lines: AE's table plus the mission's.
+        dst = opts.out / DIALOG_FILE
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_text(dialog_file(opts.ae_assets, dialogs), encoding="utf-8", newline="\n")
 
     if porter is not None:
         normalize_materials(porter.out_dir)  # older HW2A000FF builds write HoH's materials file
+    if pad_textures(opts.out) is None:
+        report.warn("ported HW1 textures were not padded to power-of-two sizes (install Pillow); "
+                    "AE refuses any that aren't")
 
     start = paths.get(camp.start) or (next(iter(paths.values())) if paths else "")
     desc = camp.description or f"Converted from the Hammerwatch mission '{camp.name}'."

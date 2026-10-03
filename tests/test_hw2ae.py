@@ -667,3 +667,247 @@ def test_combo_owned_from_start_charges():
         assert 'GetSkillLevel("shared_misc_combo")' in res.files[rel]
         assert 'pickedSkills["shared_misc_combo"]' not in res.files[rel]
 
+
+def test_ported_textures_are_padded_to_powers_of_two(tmp_path):
+    Image = pytest.importorskip("PIL.Image")
+    from hw2ae.hw1port import pad_textures
+    f = tmp_path / "hw1" / "m" / "doodads" / "big.png"
+    f.parent.mkdir(parents=True)
+    Image.new("RGBA", (500, 655), (255, 0, 0, 255)).save(f)
+    Image.new("RGBA", (64, 32)).save(f.with_name("ok.png"))
+    assert pad_textures(tmp_path) == 1
+    with Image.open(f) as im:
+        assert im.size == (512, 1024)
+        assert im.getpixel((499, 654)) == (255, 0, 0, 255) and im.getpixel((500, 0))[3] == 0
+
+
+# -- pirate cove: a custom mission's script nodes ----------------------------
+
+def test_piratecove_script_nodes():
+    # Real nodes from Hammerwatch/editor/piratecove/levels/cove.xml.
+    lv = hw1_level.load(Path(__file__).parent / "fixtures" / "piratecove_nodes.xml")
+    out = Level("DungeonGameMode", None)
+    out.units.append(Unit("doodads/x.unit", 40, 290, 999))  # next to the speech bubble
+    placed = {110183: 900, 117465: 901, 117466: 902, 109980: 903, 109982: 904, 109989: 905, 109988: 906,
+              110193: 910, 110194: 911, 118818: 912, 119534: 913, 118765: 914, 119235: 915,
+              119210: 916, 119211: 917, 119212: 918}
+    warnings: list[str] = []
+    ctx = ScriptContext(out, dict(placed), lambda i: None, warn=warnings.append,
+                        resolve_unit=lambda t: "actors/x.unit", dialog_prefix="cove")
+    convert_scripts(lv.scripts, ctx)
+    by_cls: dict[str, list] = {}
+    for s in out.scripts:
+        by_cls.setdefault(s.cls, []).append(s)
+    sid = {n.id: ctx.id_map[n.id] for n in lv.scripts}
+
+    # A hit on a placed object counts; Counter keeps HW1's count and target.
+    hit, = by_cls["UnitDamagedTrigger"]
+    assert Param("ids", "Units", [900]) in hit.params
+    c2 = next(s for s in by_cls["Counter"] if s.id == sid[110189])
+    assert Param("int", "Count", 2) in c2.params and Param("ids", "ToExecute", [911]) in c2.params
+
+    # "dynamic" = what a SpawnObject made: AE's #Units from that SpawnUnit.
+    gone, = by_cls["UnitDestroyedTrigger"]
+    assert Param("sources", "#Units", [(sid[153456], "AllSpawned")]) in gone.params
+
+    # State 2 is toggle for both (HW1's editor lists Show/Enable, Hide/Disable, Toggle).
+    hide, = by_cls["HideUnit"]
+    assert Param("int", "State", 3) in hide.params and Param("ids", "Units", [901, 902]) in hide.params
+    coll, = by_cls["ToggleCollision"]
+    assert Param("int", "State", 3) in coll.params
+
+    rnd, = by_cls["RandomCount"]
+    assert Param("int", "NumToExecute", 1) in rnd.params and Param("ids", "ToExecute", [917, 916, 918]) in rnd.params
+    shake, = by_cls["AddScreenShake"]
+    assert Param("int", "Time", 200) in shake.params and Param("float", "Amount", 4.0) in shake.params
+
+    # Set -> a flag for the whole run; toggle -> check, then set the opposite.
+    flags = by_cls["SetFlag"]
+    assert any(Param("int", "State", 2) in f.params and Param("string", "Flag", "quest_shovel") in f.params
+               for f in flags)
+    toggle, = by_cls["CheckFlag"]
+    assert {i for p in toggle.params if p.kind == "ids" for i in p.value} == \
+        {f.id for f in flags if Param("string", "Flag", "quest_text_shovel") in f.params}
+
+    # One CheckPlayerCount per HW1 player count; 4 means 4 or more in AE.
+    counts = sorted(by_cls["CheckPlayerCount"], key=lambda s: next(p.value for p in s.params if p.name == "Value"))
+    assert [next(p.value for p in s.params if p.name == "OnTrue") for s in counts] == [[912], [913], [913], [913]]
+    assert Param("int", "Function", 4) in counts[-1].params
+
+    # A speech bubble is a dialog line, anchored to the nearest unit.
+    dlg, = by_cls["StartDialog"]
+    assert ctx.dialogs == [("cove_1", "Here we are!")]
+    assert Param("string", "Dialog", "tweak/dialogs/dialog_castlehw.sval:cove_1") in dlg.params
+    assert Param("ids", "Player", [999]) in dlg.params
+
+    fx, = by_cls["SpawnEffect"]
+    assert Param("string", "Effect", "effects/blink.effect") in fx.params
+    check, = by_cls["CheckVariables"]
+    assert Param("int", "Function", 2) in check.params        # HW1 1 = Greater
+    assert any("MoveAI" in w for w in warnings)
+
+
+@needs_ae
+def test_speech_bubbles_extend_ae_dialog_table():
+    from hw2ae.ae.scripts import dialog_file
+    text = dialog_file(AE_ASSETS, [("cove_1", "Here we are & ready")])
+    import xml.etree.ElementTree as ET
+    table = ET.fromstring("<_>" + skills._BARE_AMP.sub("&amp;", text) + "</_>").find("array")
+    ids = [skills.scalar(d, "id") for d in table]
+    assert "guide1" in ids and ids[-1] == "cove_1"  # AE's own lines stay
+    assert "Here we are &amp; ready" in text
+
+
+@needs_ae
+def test_custom_items_and_actors_keep_hw1_looks(tmp_path):
+    from hw2ae.ae.custom import CustomUnits
+    from hw2ae.config import find_hw1_assets
+    from hw2ae.mapping.resolver import Resolver
+    from hw2ae.ae.assets import AssetIndex
+    hw1 = find_hw1_assets()
+    if hw1 is None:
+        pytest.skip("HW1 assets not extracted")
+    mission = tmp_path / "mission"
+    (mission / "items").mkdir(parents=True)
+    (mission / "actors").mkdir()
+    Image = pytest.importorskip("PIL.Image")
+    Image.new("RGBA", (64, 64)).save(mission / "items" / "pie.png")
+    Image.new("RGBA", (256, 160)).save(mission / "actors" / "capt.png")
+    (mission / "items" / "my_pie.xml").write_text(
+        '<item behavior="food"><behavior><dictionary><entry name="hp"><int>10</int></entry></dictionary></behavior>'
+        '<sprite scale="16"><texture>items/pie.png</texture><origin>8 8</origin><frame>16 0 16 16</frame></sprite></item>')
+    (mission / "items" / "my_key.xml").write_text(
+        '<item behavior="collectable"><behavior><dictionary><entry name="pickup-text"><string>Shovel!</string></entry>'
+        '</dictionary></behavior><sprite scale="16"><texture>items/pie.png</texture><origin>0 0</origin>'
+        '<frame>0 0 16 16</frame></sprite></item>')
+    dirs = "east northeast north northwest west southwest south southeast".split()
+    sprites = "".join(f'<sprite name="{d}{s}"><texture>actors/capt.png</texture><origin>16 24</origin>'
+                      f'<frame time="100">{32 * i} {r * 32} 32 32</frame></sprite>'
+                      for r, s in enumerate(("", "-walk", "-attack")) for i, d in enumerate(dirs))
+    (mission / "actors" / "my_skeleton_capt.xml").write_text(
+        '<actor behavior="composite"><behavior><dictionary><entry name="hp"><int>1000</int></entry>'
+        '<entry name="boss-hp"><bool>true</bool></entry>'
+        '<dictionary name="movement"><string name="type">melee</string></dictionary><array name="skills">'
+        '<dictionary><string name="type">whirlwind</string></dictionary><dictionary><string name="type">hit</string>'
+        '</dictionary><dictionary><string name="type">buff</string><string name="buff">buffs/bloodlust.xml</string>'
+        '</dictionary></array></dictionary></behavior>' + sprites +
+        '<sprite name="whirlwind"><texture>actors/capt.png</texture><origin>16 24</origin><frame>0 96 32 32</frame>'
+        '</sprite></actor>')
+    out = tmp_path / "scenario"
+    cu = CustomUnits(mission, hw1, AE_ASSETS, out, "m", Resolver(AssetIndex(AE_ASSETS)).units, lambda w: None)
+
+    # Same behaviour and values as stock health_1 -> AE's health pickup, HW1 art.
+    pie = cu.unit("items/my_pie.xml")
+    assert pie == "hw1/m/items/my_pie.unit" and cu.made["items/my_pie.xml"].twin == "items/pickups/health_1.unit"
+    text = (out / pie).read_text()
+    assert 'texture="hw1/m/items/pie.png"' in text and "<frame time=\"100\">16 0 16 16</frame>" in text
+    assert (out / "hw1/m/items/pie.png").exists()
+
+    key = (out / cu.unit("items/my_key.xml")).read_text()
+    assert "Shovel!" in key and "AnnouncePickup" not in key and ".tut.i.sphere" not in key
+
+    # Melee + whirlwind + bloodlust on a skeleton -> Castle's skeleton guard,
+    # with HW1's art per facing (AE index 0 = east, clockwise) and its hp.
+    capt = cu.unit("actors/my_skeleton_capt.xml")
+    assert "skeleton_guard" in cu.made["actors/my_skeleton_capt.xml"].twin
+    unit = (out / capt).read_text()
+    assert '<int name="hp">1000</int>' in unit
+    assert '="./' not in unit  # the twin's own "./x.png" art now points at the twin's folder
+    idle2 = unit[unit.index('<scene name="idle-2">'):]
+    assert "<frame time=\"100\">192 0 32 32</frame>" in idle2[:idle2.index("</scene>")]  # south
+    assert cu.boss_title("actors/my_skeleton_capt.xml") == "Skeleton Capt"
+
+
+def test_hw1_sprite_scale_shrinks_art_and_collision(tmp_path):
+    from hw2ae import scale
+    # starcraft_campaign's invisible blocker inv_carre: drawn at scale 32 = half size.
+    hw1 = ('<doodad><sprite scale="32"><texture>doodads/block.png</texture><origin>40 35</origin>'
+           '<frame>67 74 87 74</frame></sprite></doodad>')
+    f = scale.hw1_scale(hw1)
+    assert f == 0.5 and scale.hw1_scale('<doodad><sprite scale="16"/></doodad>') == 1.0
+    unit = ('<collision static="true"><polygon><point>-42 -34</point><point>49 35</point></polygon>'
+            '<circle offset="4 -2" radius="6" /></collision>'
+            '<sprite origin="40 35" texture="hw1/m/doodads/block.png"><frame>67 74 87 74</frame></sprite>')
+    out = scale.scale_unit(unit, f, lambda p: p.replace(".png", "@x0.5.png"))
+    assert "<point>-21 -17</point>" in out and "<point>24.5 17.5</point>" in out
+    assert 'offset="2 -1"' in out and 'radius="3"' in out
+    assert 'origin="20 18"' in out and "<frame>34 37 43 37</frame>" in out
+    assert 'texture="hw1/m/doodads/block@x0.5.png"' in out
+
+    Image = pytest.importorskip("PIL.Image")
+    src = tmp_path / "block.png"
+    Image.new("RGBA", (200, 100)).save(src)
+    with Image.open(scale.scaled_texture(src, f)) as im:
+        assert im.size == (100, 50)
+
+
+@needs_ae
+def test_custom_spawners_spawn_the_missions_units(tmp_path):
+    import re
+    from hw2ae.ae.custom import CustomUnits
+    from hw2ae.ae.assets import AssetIndex
+    from hw2ae.config import find_hw1_assets
+    from hw2ae.mapping.resolver import Resolver
+    hw1 = find_hw1_assets()
+    if hw1 is None:
+        pytest.skip("HW1 assets not extracted")
+    Image = pytest.importorskip("PIL.Image")
+    m = tmp_path / "m"
+    (m / "actors" / "spawners").mkdir(parents=True)
+    Image.new("RGBA", (96, 64)).save(m / "actors" / "art.png")
+    sprite = '<sprite scale="32" name="{n}"><texture>actors/art.png</texture><origin>8 8</origin><frame>0 0 16 16</frame></sprite>'
+    (m / "actors" / "ling.xml").write_text(
+        '<actor behavior="melee"><behavior><dictionary><entry name="hp"><int>7</int></entry>'
+        '<entry name="speed"><float>1.5</float></entry></dictionary></behavior>' + sprite.format(n="south") + "</actor>")
+    spawner = ('<actor behavior="spawner"><behavior><dictionary><array name="spawns">{spawns}</array>'
+               '<entry name="hp"><int>50</int></entry></dictionary></behavior>' + sprite.format(n="default") +
+               '<collision static="true"><circle offset="0 0" radius="30" /></collision></actor>')
+    (m / "actors" / "spawners" / "nest.xml").write_text(spawner.format(
+        spawns="<int>750</int><string>actors/ling.xml</string><int>250</int><string>actors/skeleton_1.xml</string>"))
+    (m / "actors" / "spawners" / "tower.xml").write_text(spawner.format(spawns=""))
+    out = tmp_path / "out"
+    cu = CustomUnits(m, hw1, AE_ASSETS, out, "m", Resolver(AssetIndex(AE_ASSETS)).units, lambda w: None)
+
+    # A plain melee chaser is twinned with the nearest stock chaser, never a projectile.
+    assert cu.unit("actors/ling.xml") is not None
+    assert "projectile" not in cu.made["actors/ling.xml"].twin
+
+    nest = (out / cu.unit("actors/spawners/nest.xml")).read_text()
+    proj = re.search(r'<string name="projectile">([^<]+)</string>', nest).group(1)
+    assert proj.startswith("hw1/m/") and proj.endswith("_spawn.unit")
+    listing = (out / proj).read_text()
+    assert "<int>750</int><string>hw1/m/actors/ling.unit</string>" in listing
+    assert "<int>250</int><string>actors/undead/skeletons/hammerwatch/skeleton_warrior.unit</string>" in listing
+    # Hittable: HW1's own shape (scale 32 -> radius 15), and the minimap marker stays.
+    assert '<circle offset="0 0" radius="15" />' in nest and "minimap" in nest
+
+    tower = (out / cu.unit("actors/spawners/tower.xml")).read_text()
+    assert '<array name="skills"></array>' in tower and '<int name="hp">50</int>' in tower
+
+
+def test_validator_flags_units_ae_would_refuse():
+    from hw2ae.validate import _xml_error
+    ok = ('%include "x.inc"\n<unit><behavior><string name="d">.a?x=1&y=2</string></behavior>\n'
+          '%if DIFF_HARD\n<int name="hp">2</int>\n%endif\n</unit>')
+    assert _xml_error(ok) is None
+    assert _xml_error("<unit><array name=\"skills\"></array>\n</dict></array></unit>") is not None
+
+
+@needs_ae
+def test_scene_swap_handles_scenes_inside_scenes(tmp_path):
+    import re
+    from hw2ae.ae.custom import CustomUnits
+    from hw2ae.validate import _xml_error
+    Image = pytest.importorskip("PIL.Image")
+    m = tmp_path / "m"
+    (m / "actors").mkdir(parents=True)
+    Image.new("RGBA", (64, 64)).save(m / "actors" / "a.png")
+    (m / "actors" / "civ.xml").write_text('<actor><sprite name="south"><texture>actors/a.png</texture>'
+                                          '<origin>4 4</origin><frame>0 0 8 8</frame></sprite></actor>')
+    cu = CustomUnits(m, None, AE_ASSETS, tmp_path / "out", "m", {}, lambda w: None)
+    # AE's black bat nests whole scenes inside scenes.
+    from hw2ae.ae.custom import _sprites, _hw1_xml
+    bat = (AE_ASSETS / "actors/beasts/bats/bat_black.unit").read_text(encoding="utf-8")
+    unit = cu._actor_scenes(bat, _sprites(_hw1_xml(m / "actors" / "civ.xml")))
+    assert _xml_error(unit) is None
+    assert len(re.findall(r"<scene\b[^>]*?(?<!/)>", unit)) == unit.count("</scene>")
