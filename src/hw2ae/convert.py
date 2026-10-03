@@ -123,6 +123,13 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
     for hw1_ts, layer in lv.layers.items():
         targets = resolver.tileset(hw1_ts)
         tiles16 = set(layer.tiles)
+        pieces = custom.painted(hw1_ts) if custom is not None and not targets else None
+        if pieces:
+            # A whole level painted as one image: sprite pieces, not tiles.
+            for pc in pieces:
+                out.units.append(Unit(pc.unit, pc.x, pc.y, out.new_id(), {"layer": ("int", pc.layer)}))
+            report.ported[f"{hw1_ts} (painted map, {len(pieces)} piece(s))"] += 1
+            continue
         if not targets:
             ported = porter.port_tileset(hw1_ts) if porter else None
             if ported is None:
@@ -288,7 +295,7 @@ def convert(opts: Options) -> Report:
         log(f"  {entry.res} -> {paths[entry.id]}  ({len(ae_level.units)} units, "
             f"{len(ae_level.scripts)} scripts, {len(ae_level.tile_cells)} tile cells)")
 
-    _convert_players(camp, opts, report)
+    _convert_players(camp, opts, report, custom)
     if dialogs:
         # HW1 speech bubbles are AE dialog lines: AE's table plus the mission's.
         dst = opts.out / DIALOG_FILE
@@ -310,7 +317,8 @@ def convert(opts: Options) -> Report:
     return report
 
 
-def _convert_players(camp: hw1_campaign.Campaign, opts: Options, report: Report) -> None:
+def _convert_players(camp: hw1_campaign.Campaign, opts: Options, report: Report,
+                     custom: CustomUnits | None = None) -> None:
     """The mission's class tweaks and starting lives, as overrides of AE's own
     player and script files that apply to this scenario only."""
     for d in OVERRIDE_DIRS:
@@ -330,6 +338,18 @@ def _convert_players(camp: hw1_campaign.Campaign, opts: Options, report: Report)
             report.players += notes
             if text is not None:
                 files[POWER_SHOP_SCRIPT] = text
+
+    # A mission's own player look: actors/player/<class>_a.xml.
+    table = players.load_table()
+    for hw1_cls in hw1_tweak.CLASSES:
+        look = f"actors/player/{hw1_cls}_a.xml"
+        ae_cls = table[hw1_cls]["ae"]
+        if custom is None or not (camp.root / look).is_file():
+            continue
+        text = custom.player_unit(look, f"players/{ae_cls}/{ae_cls}.unit")
+        if text is not None:
+            files[f"players/{ae_cls}/{ae_cls}.unit"] = text
+            report.players.append(f"{hw1_cls} looks: the mission's {look} on AE's {ae_cls}")
 
     if camp.lives is not None and camp.lives != players.AE_LIVES:
         text = players.lives_script(opts.ae_assets, camp.lives)

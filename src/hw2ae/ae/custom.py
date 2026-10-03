@@ -164,6 +164,7 @@ class CustomUnits:
         self.units = units
         self.warn = warn
         self.made: dict[str, Made | None] = {}
+        self._painted: dict[str, list | None] = {}
 
     # -- entry point -----------------------------------------------------------
     def unit(self, hw1_type: str) -> str | None:
@@ -173,6 +174,25 @@ class CustomUnits:
             self.made[key] = self._make(key)
         m = self.made[key]
         return m.path if m else None
+
+    def player_unit(self, hw1_player: str, ae_unit: str) -> str | None:
+        """AE's player unit with a mission's player look (``actors/player/
+        <class>_a.xml``): the same class, the mission's sprites. HW1's _b/_c/_d
+        are the other players' colours; AE tints one sprite set instead."""
+        root = _hw1_xml(self.mission / hw1_player)
+        if root is None or not (self.ae / ae_unit).is_file():
+            return None
+        text = (self.ae / ae_unit).read_text(encoding="utf-8")
+        text = text.replace('="./', f'="{PurePosixPath(ae_unit).parent}/')
+        return self._actor_scenes(text, _sprites(root))
+
+    def painted(self, hw1_tileset: str) -> list | None:
+        """Sprite pieces for a painted-map tileset (see ``painted.py``)."""
+        from .painted import painted_map
+        if hw1_tileset not in self._painted:
+            sources = [b for b in (self.mission, self.hw1) if b is not None]
+            self._painted[hw1_tileset] = painted_map(hw1_tileset, sources, self.out, self.prefix)
+        return self._painted[hw1_tileset]
 
     def boss_title(self, hw1_type: str) -> str | None:
         """A boss bar title for a mission actor flagged ``boss-hp``."""

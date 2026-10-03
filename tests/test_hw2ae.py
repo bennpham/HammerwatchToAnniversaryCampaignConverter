@@ -818,6 +818,32 @@ def test_custom_items_and_actors_keep_hw1_looks(tmp_path):
     assert cu.boss_title("actors/my_skeleton_capt.xml") == "Skeleton Capt"
 
 
+def test_painted_map_tileset_becomes_sprite_pieces(tmp_path):
+    Image = pytest.importorskip("PIL.Image")
+    from hw2ae.ae.painted import painted_map
+    mission = tmp_path / "m"
+    (mission / "tilemaps").mkdir(parents=True)
+    # starcraft_campaign's level_2: one 4178x4072 frame drawn at half size (scale 32).
+    Image.new("RGBA", (4182, 2004), (10, 20, 30, 255)).save(mission / "tilemaps" / "map.png")
+    (mission / "tilemaps" / "lvl.xml").write_text(
+        '<tileset level="253"><sprite scale="32"><texture>tilemaps/map.png</texture>'
+        '<frame>4 3 4178 2000</frame></sprite></tileset>')
+    (mission / "tilemaps" / "floor.xml").write_text(
+        '<tileset level="10"><sprite scale="16"><texture>tilemaps/map.png</texture>'
+        '<frame>0 0 64 64</frame></sprite></tileset>')
+    out = tmp_path / "scenario"
+
+    pieces = painted_map("tilemaps/lvl.xml", [mission], out, "hw1/m")
+    # Drawn 2089x1000 in the world -> two pieces side by side, none over AE's 2048.
+    assert [(p.x, p.y) for p in pieces] == [(0, 0), (2048, 0)]
+    assert all(p.layer == 253 - 1100 for p in pieces)
+    sizes = [Image.open(out / p.unit.replace(".unit", ".png")).size for p in pieces]
+    assert sizes == [(2048, 1000), (41, 1000)]
+    assert "<frame>0 0 41 1000</frame>" in (out / pieces[1].unit).read_text()
+    # An ordinary floor pattern stays a tileset.
+    assert painted_map("tilemaps/floor.xml", [mission], out, "hw1/m") is None
+
+
 def test_hw1_sprite_scale_shrinks_art_and_collision(tmp_path):
     from hw2ae import scale
     # starcraft_campaign's invisible blocker inv_carre: drawn at scale 32 = half size.
@@ -839,6 +865,31 @@ def test_hw1_sprite_scale_shrinks_art_and_collision(tmp_path):
     Image.new("RGBA", (200, 100)).save(src)
     with Image.open(scale.scaled_texture(src, f)) as im:
         assert im.size == (100, 50)
+
+
+@needs_ae
+def test_mission_player_look_replaces_every_scene(tmp_path):
+    import re
+    from hw2ae.ae.custom import CustomUnits
+    Image = pytest.importorskip("PIL.Image")
+    mission = tmp_path / "m"
+    (mission / "actors" / "player").mkdir(parents=True)
+    Image.new("RGBA", (320, 120)).save(mission / "actors" / "marine.png")
+    dirs = "east northeast north northwest west southwest south southeast".split()
+    sprites = "".join(f'<sprite scale="28" name="{d}{s}"><texture>actors/marine.png</texture><origin>20 26</origin>'
+                      f'<frame time="100">{40 * i} {r * 40} 40 40</frame></sprite>'
+                      for r, s in enumerate(("", "-walk", "-attack")) for i, d in enumerate(dirs))
+    (mission / "actors" / "player" / "ranger_a.xml").write_text(f"<actor>{sprites}</actor>")
+    cu = CustomUnits(mission, None, AE_ASSETS, tmp_path / "out", "m", {}, lambda w: None)
+
+    unit = cu.player_unit("actors/player/ranger_a.xml", "players/ranger/ranger.unit")
+    scenes = re.findall(r'<scene name="([^"]+)"[^>]*>(.*?)</scene>', unit, flags=re.S)
+    live = [(n, body) for n, body in scenes if n != "shared" and "<sprite" in body]
+    assert len(live) > 100 and all("hw1/m/actors/marine@x" in body for _, body in live)
+    assert '="./' not in unit
+    # scale 28: 40-px frames are 23 world px; AE's facing 2 is HW1's south (column 6).
+    idle2 = dict(scenes)["idle-2"]
+    assert "<frame time=\"100\">137 0 23 23</frame>" in idle2
 
 
 @needs_ae
@@ -906,8 +957,6 @@ def test_scene_swap_handles_scenes_inside_scenes(tmp_path):
                                           '<origin>4 4</origin><frame>0 0 8 8</frame></sprite></actor>')
     cu = CustomUnits(m, None, AE_ASSETS, tmp_path / "out", "m", {}, lambda w: None)
     # AE's black bat nests whole scenes inside scenes.
-    from hw2ae.ae.custom import _sprites, _hw1_xml
-    bat = (AE_ASSETS / "actors/beasts/bats/bat_black.unit").read_text(encoding="utf-8")
-    unit = cu._actor_scenes(bat, _sprites(_hw1_xml(m / "actors" / "civ.xml")))
+    unit = cu.player_unit("actors/civ.xml", "actors/beasts/bats/bat_black.unit")
     assert _xml_error(unit) is None
     assert len(re.findall(r"<scene\b[^>]*?(?<!/)>", unit)) == unit.count("</scene>")
