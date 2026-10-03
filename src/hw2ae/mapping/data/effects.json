@@ -1,0 +1,8 @@
+{
+ "_doc": "HW1 PlayEffect effect -> AE effect for SpawnEffect, and HW1 PlayGibs gib -> AE gore id (tweak/gore.sval) for SpawnGore. Effects were paired with the SpawnEffect AE's Castle Hammerwatch puts at the same spot (flash -> blink 14/14). A gib with no entry falls back on its name: sand/dust -> dust, wood -> crate_wood, rock/stone -> rock, otherwise blood_medium.",
+ "effects": {
+  "effects/particles.xml:flash": "effects/blink.effect",
+  "doodads/generic/trap_bomb_falling.xml:activate": "doodads/generic/trap_falling_bomb.effect"
+ },
+ "gibs": {}
+}

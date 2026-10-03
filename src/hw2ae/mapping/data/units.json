@@ -123,6 +123,10 @@
   "items/trigger_button_save.xml": {"ae": "doodads/generic/button_save.unit"},
   "_crystal_purple": "A value-0 pickup HW1 scripts watch: the random dungeon generator's win orb (ObjectEventTrigger Destroyed -> GameEnd). AE's sphere collectable is likewise a walk-over pickup that is destroyed when collected.",
   "items/crystal_purple.xml": {"ae": "items/pickups/collectable_10_sphere.unit"},
+  "_bomb_roof": "HW1's roof bomb (behavior bomb, 1000 ms fuse) after its trap_bomb_falling effect: AE's trap_bomb_red is the same bomb behaviour (1125 ms), shown with AE's trap_falling_bomb effect.",
+  "items/bomb_roof.xml": {"ae": "doodads/generic/trap_bomb_red.unit"},
+  "_bonus_skeleton": "The bonus levels' skeletons became ghosts in AE: 920 HW1 actors/bonus/skeleton_1 stand next to a bonus_ghost on Castle's bonus levels (bonus_demon next: 97).",
+  "actors/bonus/skeleton_1.xml": {"ae": "actors/special/bonus/bonus_ghost.unit"},
 
   "items/breakable_crate.xml": {"ae": "doodads/generic/containers/crate_wood_12x12.unit"},
   "items/breakable_crate_b.xml": {"ae": "doodads/generic/containers/crate_wood_16x16.unit"},

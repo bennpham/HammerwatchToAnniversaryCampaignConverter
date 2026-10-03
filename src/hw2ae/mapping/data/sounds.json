@@ -2,7 +2,9 @@
   "_doc": "HW1 sound and music -> AE. 'sounds': a PlaySound node's bank file:name -> the FMOD event AE's own levels use for the same moment. 'music' / 'ambience': a PlayMusic track (sound/music.xml:<name>) -> the MusicMode / AmbienceMode value AE's region table (tweak/regions.sval) gives the matching Castle Hammerwatch area; the acts are prison, armory, archives, chambers. 'music_stingers': tracks AE plays as a one-shot event. Anything missing here stays a plain ScriptLink and is reported.",
   "sounds": {
     "sound/misc.xml:info_teleport_activate": "event:/SFX/Effects/other/teleport",
-    "sound/misc.xml:button_hatch": "event:/SFX/Objects/Buttons/button_generic"
+    "sound/misc.xml:button_hatch": "event:/SFX/Objects/Buttons/button_generic",
+    "sound/misc.xml:wall_move": "event:/SFX/Objects/Doors/stone_slide_short_1",
+    "sound/misc.xml:info_secret": "event:/SFX/UI/secret/secret_area"
   },
   "music": {
     "sound/music.xml:none": 0,

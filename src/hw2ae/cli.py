@@ -77,13 +77,16 @@ def cmd_convert(args) -> int:
 
 
 def _pack(root: Path, folder: Path) -> int:
-    from .hw1port import normalize_materials
+    from .hw1port import normalize_materials, pad_textures
     from .pack import pack
     # Units from any tool (older HW2A000FF, the original C# one, hand-copied)
     # point at HoH's system/hammerwatch.mats, which AE doesn't ship.
     fixed = normalize_materials(folder)
     if fixed:
         print(f"Pointed {fixed} unit/tileset file(s) at AE's system/default.mats.")
+    padded = pad_textures(folder)
+    if padded:
+        print(f"Padded {padded} ported texture(s) to power-of-two sizes for AE.")
     try:
         h1c = pack(root, folder)
     except RuntimeError as e:

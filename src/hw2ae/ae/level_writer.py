@@ -52,6 +52,14 @@ def _write_param(w: Writer, p: Param) -> None:
         w.int(sid)
         w.string(event)
         w.close("array")
+    elif p.kind == "sources":
+        # Units other scripts produce, e.g. a SpawnUnit's AllSpawned:
+        # [script id, source name, script id, source name, ...].
+        w.open("array", p.name)
+        for sid, source in p.value:  # type: ignore[union-attr]
+            w.int(sid)
+            w.string(source)
+        w.close("array")
     elif p.kind == "bool":
         w.bool(bool(p.value), p.name)
     elif p.kind == "int":

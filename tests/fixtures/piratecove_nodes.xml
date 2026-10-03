@@ -1,0 +1,239 @@
+<dictionary><dictionary name="scripting"><array name="nodes"><dictionary>
+				<int name="id">110185</int>
+				<string name="type">ObjectEventTrigger</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">4</int>
+				<vec2 name="pos">14.5 -20</vec2>
+				<dictionary name="parameters">
+					<string name="event">Hit</string>
+					<dictionary name="object">
+						<int-arr name="static">110183</int-arr>
+					</dictionary>
+				</dictionary>
+				<int-arr name="connections">110190 110189 110191 110192</int-arr>
+				<int-arr name="connection-delays">0 0 0 0</int-arr>
+			</dictionary>
+			<dictionary>
+				<int name="id">110189</int>
+				<string name="type">Counter</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">2</int>
+				<vec2 name="pos">17 -19</vec2>
+				<dictionary name="parameters">
+					<int name="count">2</int>
+					<dictionary name="execute">
+						<int-arr name="static">110194</int-arr>
+					</dictionary>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">110190</int>
+				<string name="type">Counter</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">1</int>
+				<vec2 name="pos">17 -17</vec2>
+				<dictionary name="parameters">
+					<int name="count">1</int>
+					<dictionary name="execute">
+						<int-arr name="static">110193</int-arr>
+					</dictionary>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">153456</int>
+				<string name="type">SpawnObject</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">39 -41.5</vec2>
+				<string name="parameters">items/upgrade_damage.xml</string>
+			</dictionary>
+			<dictionary>
+				<int name="id">153478</int>
+				<string name="type">ObjectEventTrigger</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">38 -28.5</vec2>
+				<dictionary name="parameters">
+					<string name="event">Destroyed</string>
+					<dictionary name="object">
+						<int-arr name="dynamic">153456 0</int-arr>
+					</dictionary>
+				</dictionary>
+				<int-arr name="connections">153476</int-arr>
+				<int-arr name="connection-delays">0</int-arr>
+			</dictionary>
+			<dictionary>
+				<int name="id">119227</int>
+				<string name="type">HideObject</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">200.5 -99.5</vec2>
+				<dictionary name="parameters">
+					<int name="state">2</int>
+					<dictionary name="element">
+						<int-arr name="static">117465 117466</int-arr>
+					</dictionary>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">109992</int>
+				<string name="type">TogglePhysics</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">13.5 16.5</vec2>
+				<dictionary name="parameters">
+					<int name="state">2</int>
+					<dictionary name="doodad">
+						<int-arr name="static">109980 109982 109989 109988</int-arr>
+					</dictionary>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">119213</int>
+				<string name="type">Random</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">181.5 -121.5</vec2>
+				<dictionary name="parameters">
+					<dictionary name="nodes">
+						<int-arr name="static">119211 119210 119212</int-arr>
+					</dictionary>
+					<bool name="run-one">True</bool>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">103783</int>
+				<string name="type">CameraShake</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">18 -2</vec2>
+				<dictionary name="parameters">
+					<int name="duration">200</int>
+					<float name="x-amount">0.25</float>
+					<float name="y-amount">0.25</float>
+					<int name="speed">100</int>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">156390</int>
+				<string name="type">SetGlobalFlag</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">-19 15</vec2>
+				<dictionary name="parameters">
+					<string name="flag">quest_shovel</string>
+					<int name="state">0</int>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">152985</int>
+				<string name="type">SetGlobalFlag</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">1</int>
+				<vec2 name="pos">111.5 21.5</vec2>
+				<dictionary name="parameters">
+					<string name="flag">quest_text_shovel</string>
+					<int name="state">2</int>
+				</dictionary>
+				<int-arr name="connections">153013</int-arr>
+				<int-arr name="connection-delays">2000</int-arr>
+			</dictionary>
+			<dictionary>
+				<int name="id">119537</int>
+				<string name="type">PlayerCount</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">186.5 -51.5</vec2>
+				<dictionary name="parameters">
+					<bool name="inc-disc">False</bool>
+					<dictionary name="plrs-1">
+						<int-arr name="static">118818</int-arr>
+					</dictionary>
+					<dictionary name="plrs-2">
+						<int-arr name="static">119534</int-arr>
+					</dictionary>
+					<dictionary name="plrs-3">
+						<int-arr name="static">119534</int-arr>
+					</dictionary>
+					<dictionary name="plrs-4">
+						<int-arr name="static">119534</int-arr>
+					</dictionary>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">765</int>
+				<string name="type">ShowSpeechBubble</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">2.125 18.25</vec2>
+				<dictionary name="parameters">
+					<string name="style">menus/speech/normal_speech.xml</string>
+					<string name="text">Here we are!</string>
+					<dictionary name="objects">
+					</dictionary>
+					<float name="x-offset">0</float>
+					<float name="y-offset">0</float>
+					<int name="width">50</int>
+					<int name="layer">0</int>
+					<int name="time">0</int>
+					<dictionary name="execute">
+					</dictionary>
+				</dictionary>
+				<int-arr name="connections">769</int-arr>
+				<int-arr name="connection-delays">4000</int-arr>
+			</dictionary>
+			<dictionary>
+				<int name="id">109949</int>
+				<string name="type">SpawnObject</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">6 29.5</vec2>
+				<string name="parameters">actors/skeleton_1_small.xml</string>
+			</dictionary>
+			<dictionary>
+				<int name="id">109954</int>
+				<string name="type">MoveAI</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">6 27.5</vec2>
+				<dictionary name="parameters">
+					<dictionary name="actors">
+						<int-arr name="dynamic">109949 0</int-arr>
+					</dictionary>
+					<dictionary name="target">
+						<int-arr name="static">109955</int-arr>
+					</dictionary>
+					<float name="break-range">0</float>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">119467</int>
+				<string name="type">CheckVariable</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">192.5 -40.5</vec2>
+				<dictionary name="parameters">
+					<dictionary name="vars">
+						<int-arr name="static">119235</int-arr>
+					</dictionary>
+					<int name="cmp-func">1</int>
+					<int name="cmp-val">0</int>
+					<dictionary name="on-true">
+						<int-arr name="static">118765</int-arr>
+					</dictionary>
+					<dictionary name="on-false">
+					</dictionary>
+				</dictionary>
+			</dictionary>
+			<dictionary>
+				<int name="id">114809</int>
+				<string name="type">PlayEffect</string>
+				<bool name="enabled">True</bool>
+				<int name="trigger-times">-1</int>
+				<vec2 name="pos">69.375 -16</vec2>
+				<dictionary name="parameters">
+					<string name="effect">effects/particles.xml:flash</string>
+					<int name="layer">20</int>
+				</dictionary>
+			</dictionary>
+			</array></dictionary></dictionary>
