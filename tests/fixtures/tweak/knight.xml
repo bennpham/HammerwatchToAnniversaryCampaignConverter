@@ -1,0 +1,26 @@
+<tweak>
+	<params>
+		<dictionary>
+			<int name="max-health">125</int>
+			<int name="sword-dmg">26</int>
+			<bool name="heal">true</bool>
+			<int name="heal-amount">6</int>
+			<int name="heal-mana-cost">8</int>
+			<float name="whirl-range">1</float>
+		</dictionary>
+	</params>
+
+	<upgrades>
+		<dictionary id="healeff2" cost="2600" req="healeff1" cat="def4" name="healeff-uname" desc="healeff-udesc">
+			<int name="lvl">2</int>
+			<int name="heal-amount">7</int>
+			<int name="heal-mana-cost">7</int>
+		</dictionary>
+		<dictionary id="healeff3" cost="0" req="healeff2" cat="def5" name="healeff-uname" desc="healeff-udesc">
+			<int name="lvl">3</int>
+			<int name="heal-amount">8</int>
+			<int name="heal-mana-cost">6</int>
+		</dictionary>
+		<dictionary id="lightning" cost="100" cat="off1" name="x" desc="y" />
+	</upgrades>
+</tweak>

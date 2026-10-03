@@ -9,13 +9,14 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
-from .ae import doors, level_writer, scenario
+from .ae import doors, level_writer, players, scenario
 from .ae.assets import AssetIndex
 from .ae.model import Level, PrefabPlacement, Unit
 from .ae.scripts import ScriptContext, convert_scripts
 from .ae.tiles import TileLayers
 from .hw1 import campaign as hw1_campaign
 from .hw1 import level as hw1_level
+from .hw1 import tweak as hw1_tweak
 from .hw1port import Porter, make_porter, normalize_materials
 from .mapping.resolver import Dropped, Placement, Resolver
 
@@ -42,9 +43,11 @@ BOSS_BAR_NAMES = {
     "actors/bosses/boss_krilith/boss_krilith.unit": ".d.ig.boss_2",
     "actors/bosses/boss_anubis/boss_anubis.unit": ".d.ig.boss_3",
 }
-# AE hard-codes the party's starting lives (PartyRecord.as); only the
-# NO_LIVES / DOUBLE_LIVES / INFINITE_LIVES modifiers change them.
-AE_LIVES = 2
+# Stock AE files a scenario overrides by shipping its own copy at the same
+# path. Ours alone, so they are rebuilt from scratch on every run.
+OVERRIDE_DIRS = ("players", "scripts")
+LIVES_SCRIPT = "scripts/Modules/PartyRecord.as"
+POWER_SHOP_SCRIPT = "scripts/GUI/Shop/PowerShopMenuContent.as"
 
 
 @dataclass
@@ -56,6 +59,7 @@ class Report:
     unmapped_tilesets: collections.Counter = field(default_factory=collections.Counter)
     dropped: collections.Counter = field(default_factory=collections.Counter)
     ported: collections.Counter = field(default_factory=collections.Counter)
+    players: list[str] = field(default_factory=list)  # what each HW1 class tweak became
     warnings: list[str] = field(default_factory=list)
 
     def warn(self, msg: str) -> None:
@@ -260,9 +264,7 @@ def convert(opts: Options) -> Report:
         log(f"  {entry.res} -> {paths[entry.id]}  ({len(ae_level.units)} units, "
             f"{len(ae_level.scripts)} scripts, {len(ae_level.tile_cells)} tile cells)")
 
-    if camp.lives is not None and camp.lives != AE_LIVES:
-        hint = " (tick the 'No lives' modifier for 0)" if camp.lives == 0 else ""
-        report.warn(f"the HW1 mission sets {camp.lives} lives; AE always starts with {AE_LIVES}{hint}")
+    _convert_players(camp, opts, report)
 
     if porter is not None:
         normalize_materials(porter.out_dir)  # older HW2A000FF builds write HoH's materials file
@@ -274,6 +276,42 @@ def convert(opts: Options) -> Report:
 
     log(f"Done in {time.perf_counter() - t0:.1f}s")
     return report
+
+
+def _convert_players(camp: hw1_campaign.Campaign, opts: Options, report: Report) -> None:
+    """The mission's class tweaks and starting lives, as overrides of AE's own
+    player and script files that apply to this scenario only."""
+    for d in OVERRIDE_DIRS:
+        shutil.rmtree(opts.out / d, ignore_errors=True)
+    files: dict[str, str] = {}
+
+    tweaks = hw1_tweak.load_dir(camp.root / "tweak")
+    if tweaks:
+        res = players.Converter(tweaks, opts.ae_assets).run()
+        files.update(res.files)
+        report.players += res.lines
+        for w in res.warnings:
+            report.warn(f"tweak: {w}")
+        if "shared" in tweaks:
+            stock = hw1_tweak.load_stock()["shared"]
+            text, notes = players.power_shop_script(opts.ae_assets, tweaks["shared"], stock, players.load_table())
+            report.players += notes
+            if text is not None:
+                files[POWER_SHOP_SCRIPT] = text
+
+    if camp.lives is not None and camp.lives != players.AE_LIVES:
+        text = players.lives_script(opts.ae_assets, camp.lives)
+        if text is None:
+            report.warn(f"the HW1 mission starts with {camp.lives} lives, but AE's PartyRecord.as changed; "
+                        f"AE's {players.AE_LIVES} are kept")
+        else:
+            files[LIVES_SCRIPT] = text
+            report.players.append(f"starting lives: {camp.lives} (AE: {players.AE_LIVES})")
+
+    for rel, text in files.items():
+        dst = opts.out / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_text(text, encoding="utf-8", newline="\n")
 
 
 def _write_logo(src: Path, out: Path, start_lvl: str, ae_assets: Path, report: Report) -> None:

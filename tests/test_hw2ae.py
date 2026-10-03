@@ -533,7 +533,8 @@ def test_convert_fixture_against_ae(tmp_path):
     report = convert(Options(source=FIX, out=tmp_path / "test_dungeon", ae_assets=AE_ASSETS, log=lambda *a: None))
     assert report.levels == 2
     assert report.unmapped == {"items/some_unknown_item.xml": 1}
-    assert any("sets 0 lives" in w for w in report.warnings)
+    lives = (tmp_path / "test_dungeon" / "scripts" / "Modules" / "PartyRecord.as").read_text()
+    assert "m_lives = 0;" in lives and "m_lives = 2;" not in lives  # the mission's info.xml sets 0
     problems, n = validate(tmp_path / "test_dungeon", AssetIndex(AE_ASSETS))
     assert n == 2 and not problems, problems.items
     lvl0 = level_reader.load(tmp_path / "test_dungeon" / "levels" / "test_dungeon" / "level0.lvl")
@@ -546,3 +547,123 @@ def test_convert_fixture_against_ae(tmp_path):
     lvl1 = level_reader.load(tmp_path / "test_dungeon" / "levels" / "test_dungeon" / "level1.lvl")
     assert lvl1.environment == "effects/lighting/archives_1.env"  # dim HW1 ambient keeps the theme
     assert any(u.type == "doodads/walls/archives/h.unit" for u in lvl1.units)
+
+
+# -- HW1 class tweaks -> AE player files ------------------------------------
+
+from hw2ae.ae import players, skills  # noqa: E402
+from hw2ae.hw1 import tweak  # noqa: E402
+
+TWEAK = Path(__file__).parent / "fixtures" / "tweak"
+
+
+def test_parse_hw1_tweak():
+    t = tweak.load_dir(TWEAK)["knight"]
+    assert t.params["max-health"] == 125 and t.params["heal"] is True and t.params["whirl-range"] == 1.0
+    assert [u.id for u in t.upgrades] == ["healeff2", "healeff3", "lightning"]
+    assert t.upgrade("healeff3").cost == 0 and t.upgrade("healeff2").values == {"heal-amount": 7, "heal-mana-cost": 7}
+
+
+def test_stock_tiers_follow_unlocks():
+    stock = tweak.load_stock()["knight"]
+    heal = players.Ladder(["heal", "healeff"], "pal_healing", None, {"heal-amount": ("bind:heal", "id")})
+    tiers, ups = players.hw1_tiers(stock, heal)
+    assert [t["heal-amount"] for t in tiers] == [-1, 5, 6, 7, 8]
+    assert [u.id for u in ups] == ["heal", "healeff1", "healeff2", "healeff3"]
+    # A ladder hanging off an unlock starts from the unlocked values.
+    dur = players.Ladder(["whirldur"], "pal_whirlwind", "pal_whirlwind_duration", {"whirl-dur": ("x", "ms")},
+                         after=["whirl"])
+    assert [t["whirl-dur"] for t in players.hw1_tiers(stock, dur)[0]] == [4, 6, 8]
+    assert players.ladder_key("whirldur") == players.ladder_key("whirldur1") == "whirldur"
+    assert players.ladder_key("health-3") == "health"
+
+
+def test_stock_json_matches_hw1_assets():
+    from hw2ae.config import find_hw1_assets
+    hw1 = find_hw1_assets()
+    if hw1 is None or not (hw1 / "tweak").is_dir():
+        pytest.skip("HW1 assets not extracted")
+    live = tweak.load_dir(hw1 / "tweak")
+    assert {k: tweak.to_json(v) for k, v in live.items()} == \
+        {k: tweak.to_json(v) for k, v in tweak.load_stock().items()}
+
+
+def test_unit_conversions():
+    assert players._convert("inv1000", 600, []) == pytest.approx(1.6667, abs=1e-4)
+    assert players._convert("lin 20 10", 4, []) == 90  # charge range: tiles -> AE units
+    assert players._convert("ratio", 1.1, [(0.9, 1.2)]) == pytest.approx(1.4667, abs=1e-4)
+    assert players._convert("interp", 4.25, [(3, 350), (4, 450), (5, 550)]) == 475
+    assert players._convert("interp", 8, [(5, 550), (6.5, 650)]) == 750  # extrapolates
+
+
+def test_skill_svals_keep_bare_ampersands():
+    text = ('<dict>\n\t<string name="description">.x?a=1&b=2</string>\n\t<array name="upgrades">\n\t</array>\n'
+            '</dict>\n<dict>\n\t<string name="name">duplicate</string>\n</dict>\n')
+    root = skills.parse(text)
+    assert skills.scalar(root, "description") == ".x?a=1&b=2"
+    out = skills.serialize(root)
+    assert "a=1&b=2" in out and "&amp;" not in out and "duplicate" not in out
+    assert '<array name="upgrades"></array>' in out  # AE's files never self-close
+
+
+@needs_ae
+def test_tweaks_against_ae():
+    res = players.Converter(tweak.load_dir(TWEAK), AE_ASSETS).run()
+
+    # On a stock tier: AE's own value for that tier, nothing more to buy.
+    sword = skills.parse(res.files["players/paladin/skills/pal_sword.sval"])
+    dmg = skills.find_mod(sword, "pal_sword_dmg")
+    assert skills.scalar(dmg, "starting-level") == "3"
+    assert all(skills.child(s, "category") is None for s in [dmg] + skills.levels(dmg))
+
+    # Owned at tier 2 while the shop still sells tiers 3 and 4: AE lists
+    # level[picked] as the next buy, so the entries move down two levels.
+    heal = skills.parse(res.files["players/paladin/skills/pal_healing.sval"])
+    lv = skills.levels(heal)
+    assert skills.scalar(heal, "starting-level") == "2"
+    assert skills.scalar(heal, "category") == "def4"
+    assert (skills.scalar(lv[0], "category"), skills.scalar(lv[0], "cost")) == ("def4", "2600")
+    assert (skills.scalar(lv[1], "category"), skills.scalar(lv[1], "cost")) == ("def5", "0")  # mission's price
+    assert skills.child(lv[2], "category") is None and skills.child(lv[3], "category") is None
+
+    # Off every tier: the author's own number, in the class's base stats.
+    classes = res.files["players/classes.sval"]
+    paladin = classes[classes.index("<string name=\"id\">paladin</string>"):]
+    assert '<int name="base-health">125</int>' in paladin[:paladin.index("</dict>")]
+
+    assert any("whirl-range" in w for w in res.warnings)
+    assert any("lightning" in w for w in res.warnings)
+    assert not any(f.startswith("players/priest/") for f in res.files)  # no priest.xml: AE stock
+
+
+@needs_ae
+def test_stock_tweaks_change_nothing():
+    stock = tweak.load_stock()
+    assert players.Converter(dict(stock), AE_ASSETS, stock=stock).run().files == {}
+
+
+@needs_ae
+def test_power_shop_and_lives_scripts():
+    stock = tweak.load_stock()["shared"]
+    mission = tweak.Tweak(dict(stock.params), [u for u in stock.upgrades if u.id != "life"])
+    text, notes = players.power_shop_script(AE_ASSETS, mission, stock, players.load_table())
+    build = text[text.index("void BuildList()"):text.index("void ReloadList()")]
+    assert '"power_life"' not in build and '"power_rejuv", ".rejuv-uname", ".rejuv-udesc", 175' in build
+    assert '"potion_damage", ".pot-dmg-uname", ".pot-dmg-udesc", 1000' in build  # stock HW1 price -> AE's
+    assert any("'life' not sold" in n for n in notes)
+    assert players.power_shop_script(AE_ASSETS, stock, stock, players.load_table())[0] is None
+    assert "m_lives = 0;" in players.lives_script(AE_ASSETS, 0)
+
+
+@needs_ae
+def test_combo_owned_from_start_charges():
+    stock = tweak.load_stock()
+    shared = tweak.Tweak({**stock["shared"].params, "combo": True}, [])
+    res = players.Converter({"shared": shared}, AE_ASSETS, stock=stock).run()
+    combo = skills.parse(res.files["players/shared/skills/shared_combo.sval"])
+    assert skills.scalar(combo, "starting-level") == "1"
+    # AE counts bought levels only; the overrides count the starting level too.
+    for rel in players.COMBO_SCRIPTS:
+        assert 'GetSkillLevel("shared_misc_combo")' in res.files[rel]
+        assert 'pickedSkills["shared_misc_combo"]' not in res.files[rel]
+

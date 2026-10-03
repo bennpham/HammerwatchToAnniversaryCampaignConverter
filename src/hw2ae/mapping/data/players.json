@@ -1,0 +1,227 @@
+{
+ "_doc": [
+  "HW1 tweak params -> AE player skills (players/<class>/skills/<skill>.sval).",
+  "A ladder is one HW1 upgrade chain ('hw1': upgrade ids without their trailing number) and the AE skill, or modifier skill ('mod': id, or index for id-less ones), whose levels are the same tiers.",
+  "'after' names the unlock ladder whose values are this ladder's tier 0. 'unlock' is the bool param (or 'param>0') that owns the skill.",
+  "params: HW1 param -> [AE key, conversion]. The key is 'bind:<name>' or a plain skill param; null means AE has no equivalent. The conversion is only used for values that sit on no HW1 tier: id, pct (/100), ms (s -> ms), x16 (tiles -> px), inv (1/x), inv1000 (1000/x), lin a b (a*x+b), ratio (scaled by AE/HW1 tier 0), interp (through the tier pairs), snap (nearest tier: AE keeps it in a buff file).",
+  "base: params no HW1 upgrade changes -> [skill, AE key, conversion], or null.",
+  "Paired by shop category and level, which AE kept from HW1 for every class."
+ ],
+ "knight": {
+  "ae": "paladin",
+  "ladders": [
+   {"hw1": ["health"], "skill": "pal_misc_health", "params": {"max-health": ["bind:player-max-health-set", "id"]}},
+   {"hw1": ["mana"], "skill": "pal_misc_mana", "params": {"max-mana": ["bind:player-max-mana-set", "id"], "mana-regen": ["bind:player-mana-regen-set", "inv1000"]}},
+   {"hw1": ["armor"], "skill": "pal_misc_armor", "mod": 0, "params": {"dmg-reduction": ["bind:player-armor-set", "id"]}},
+   {"hw1": ["dmg"], "skill": "pal_sword", "mod": "pal_sword_dmg", "params": {"sword-dmg": ["bind:sword-dmg", "id"]}},
+   {"hw1": ["arc"], "skill": "pal_sword", "mod": "pal_sword_arc", "params": {"sword-arc": ["bind:sword-angleoffset", "snap"], "sword-arc-gfx": [null, null]}},
+   {"hw1": ["chrgdmg"], "skill": "pal_charge", "mod": "pal_charge_damage", "params": {"charge-dmg-multiplier": ["bind:charge-dmg-multiplier", "id"]}},
+   {"hw1": ["chrgrng"], "skill": "pal_charge", "mod": "pal_charge_range", "params": {"charge-dist": ["bind:charge-dist", "lin 20 10"], "charge-speed": ["bind:charge-speed", "lin 2 3"]}},
+   {"hw1": ["whirl"], "skill": "pal_whirlwind", "unlock": "whirl", "params": {}},
+   {"hw1": ["whirldmg"], "after": ["whirl"], "skill": "pal_whirlwind", "mod": "pal_whirlwind_damage", "params": {"whirl-dmg-multiplier": ["bind:whirl-dmg-multiplier", "id"]}},
+   {"hw1": ["whirldur"], "after": ["whirl"], "skill": "pal_whirlwind", "mod": "pal_whirlwind_duration", "params": {"whirl-dur": ["bind:whirl-duration", "ms"]}},
+   {"hw1": ["bash"], "skill": "pal_bash", "params": {"bash-chance": ["bind:bash-chance", "pct"]}},
+   {"hw1": ["heal", "healeff"], "skill": "pal_healing", "unlock": "heal", "params": {"heal-amount": ["bind:heal", "id"], "heal-mana-cost": ["mana-cost", "id"]}},
+   {"hw1": ["shield"], "skill": "pal_shield", "mod": 0, "params": {"shield-arc": ["bind:shield-arc", "id"]}}
+  ],
+  "base": {
+   "sword-range": null,
+   "charge-mana-cost": ["pal_charge", "mana-cost", "id"],
+   "whirl-range": null,
+   "whirl-mana-cost": ["pal_whirlwind", "mana-cost", "id"]
+  }
+ },
+ "priest": {
+  "ae": "priest",
+  "ladders": [
+   {"hw1": ["health"], "skill": "priest_misc_health", "params": {"max-health": ["bind:player-max-health-set", "id"]}},
+   {"hw1": ["mana"], "skill": "priest_misc_mana", "params": {"max-mana": ["bind:player-max-mana-set", "id"], "mana-regen": ["bind:player-mana-regen-set", "inv1000"]}},
+   {"hw1": ["armor"], "skill": "priest_misc_armor", "mod": 0, "params": {"dmg-reduction": ["bind:player-armor-set", "id"]}},
+   {"hw1": ["dmg"], "skill": "priest_smite", "mod": "priest_smite_damage", "params": {"smite-dmg": ["bind:smite-dmg", "id"], "smite-area": ["bind:smite-radius", "x16"]}},
+   {"hw1": ["sspeed"], "skill": "priest_smite", "mod": "priest_smite_speed", "params": {"smite-speed-pen": ["bind:smite-speed-pen", "lin -0.01 1"]}},
+   {"hw1": ["beamdmg"], "skill": "priest_beam", "mod": "priest_beam_damage", "params": {"beam-dmg": ["bind:beam-damage", "id"], "beam-heal": ["bind:beam-heal", "id"]}},
+   {"hw1": ["beamrng"], "skill": "priest_beam", "mod": "priest_beam_range", "params": {"beam-range": ["bind:beam-range", "x16"]}},
+   {"hw1": ["area"], "skill": "priest_draining_field", "unlock": "area", "params": {"area-range": [null, null], "area-duration": [null, null], "area-heal-mul": [null, null]}},
+   {"hw1": ["areadmg"], "after": ["area"], "skill": "priest_draining_field", "mod": "priest_draining_field_damage", "params": {"area-dmg": ["bind:field-damage", "id"]}},
+   {"hw1": ["areanum"], "after": ["area"], "skill": "priest_draining_field", "mod": "priest_draining_field_count", "params": {"area-limit": ["bind:field-max-count", "id"]}},
+   {"hw1": ["aura"], "skill": "priest_cripple_aura", "unlock": "aura", "params": {"aura-range": [null, null]}},
+   {"hw1": ["auraslow"], "after": ["aura"], "skill": "priest_cripple_aura", "mod": "priest_cripple_aura_slow", "params": {"aura-buff": ["bind:cripple-buff", "snap"]}},
+   {"hw1": ["auradrain"], "after": ["aura"], "skill": "priest_cripple_aura", "mod": "priest_cripple_aura_drain", "params": {"aura-mana-drain": ["bind:mana-drain", "id"]}},
+   {"hw1": ["hpregen"], "skill": "priest_health_regen", "params": {"hp-regen": ["bind:player-health-regen-set", "inv"]}},
+   {"hw1": ["mshield"], "skill": "priest_mana_shield", "mod": "priest_mana_shield_dmg_per_mana", "params": {"shield-dmg-per-mana": ["bind:dmg-per-mana", "id"]}}
+  ],
+  "base": {
+   "smite-range": null,
+   "smite-effect": null,
+   "beam-mana-cost": ["priest_beam", "mana-cost", "id"],
+   "area-effect": null,
+   "area-mana-cost": ["priest_draining_field", "mana-cost", "id"],
+   "aura-effect": null,
+   "aura-mana-cost": ["priest_cripple_aura", "mana-cost", "id"],
+   "shield-distr": ["priest_mana_shield", "shield-distr", "pct"],
+   "shield-effect": null
+  }
+ },
+ "ranger": {
+  "ae": "ranger",
+  "ladders": [
+   {"hw1": ["health"], "skill": "ran_misc_health", "params": {"max-health": ["bind:player-max-health-set", "id"]}},
+   {"hw1": ["mana"], "skill": "ran_misc_mana", "params": {"max-mana": ["bind:player-max-mana-set", "id"], "mana-regen": ["bind:player-mana-regen-set", "inv1000"]}},
+   {"hw1": ["armor"], "skill": "ran_misc_armor", "mod": 0, "params": {"dmg-reduction": ["bind:player-armor-set", "id"]}},
+   {"hw1": ["dmg"], "skill": "ran_bow", "mod": "ran_bow_damage", "params": {"bow-dmg": ["bind:proj-damage", "id"], "bow-projectile": [null, null]}},
+   {"hw1": ["pen"], "skill": "ran_bow", "mod": "ran_bow_penetration", "params": {"bow-penetration": ["bind:proj-penetration", "id"]}},
+   {"hw1": ["bombdmg"], "skill": "ran_bomb", "mod": "ran_bomb_damage", "params": {"bomb-dmg": ["bind:bomb-damage", "id"]}},
+   {"hw1": ["spread"], "skill": "ran_flurry", "unlock": "spread", "params": {}},
+   {"hw1": ["spreadshts"], "after": ["spread"], "skill": "ran_flurry", "mod": "ran_flurry_arrows", "params": {"spread-arrows": ["bind:flurry-per-revolution", "lin -1 0"]}},
+   {"hw1": ["spreadwvs"], "after": ["spread"], "skill": "ran_flurry", "mod": "ran_flurry_waves", "params": {"spread-waves": ["bind:flurry-waves", "id"]}},
+   {"hw1": ["crit"], "skill": "ran_marksman", "params": {"crit-chance": ["bind:crit-chance", "pct"]}},
+   {"hw1": ["dodge"], "skill": "ran_dodge", "params": {"dodge-chance": ["bind:dodge-chance", "pct"]}},
+   {"hw1": ["growth"], "skill": "ran_growth", "unlock": "growth", "params": {}},
+   {"hw1": ["growthdur"], "after": ["growth"], "skill": "ran_growth", "mod": "ran_growth_duration", "params": {"growth-duration": ["bind:growth-buff", "snap"]}},
+   {"hw1": ["growthrng"], "after": ["growth"], "skill": "ran_growth", "mod": "ran_growth_radius", "params": {"growth-range": ["bind:growth-radius", "x16"]}}
+  ],
+  "base": {
+   "bomb-item": null,
+   "bomb-splash": null,
+   "bomb-mana-cost": ["ran_bomb", "mana-cost", "id"],
+   "growth-mana-cost": ["ran_growth", "mana-cost", "id"],
+   "spread-mana-cost": ["ran_flurry", "mana-cost", "id"]
+  }
+ },
+ "sorcerer": {
+  "ae": "sorcerer",
+  "ladders": [
+   {"hw1": ["health"], "skill": "sorc_misc_health", "params": {"max-health": ["bind:player-max-health-set", "id"]}},
+   {"hw1": ["mana"], "skill": "sorc_misc_mana", "params": {"max-mana": ["bind:player-max-mana-set", "id"], "mana-regen": ["bind:player-mana-regen-set", "inv1000"]}},
+   {"hw1": ["armor"], "skill": "sorc_misc_armor", "mod": 0, "params": {"dmg-reduction": ["bind:player-armor-set", "id"]}},
+   {"hw1": ["dmg"], "skill": "sorc_shard", "mod": "sorc_shard_damage", "params": {"shard-dmg": ["bind:proj-damage", "id"]}},
+   {"hw1": ["rng"], "skill": "sorc_shard", "mod": "sorc_shard_range", "params": {"shard-range": ["bind:proj-ttl", "lin 120 -20"], "shard-bounces": ["bind:proj-penetration", "id"]}},
+   {"hw1": ["cometdmg"], "skill": "sorc_comet", "mod": "sorc_comet_damage", "params": {"comet-dmg": ["bind:comet-damage", "id"], "comet-mana-cost": ["mana-cost", "id"]}},
+   {"hw1": ["orb"], "skill": "sorc_ice_orb", "unlock": "orb", "params": {}},
+   {"hw1": ["orbtime"], "after": ["orb"], "skill": "sorc_ice_orb", "mod": "sorc_orb_time", "params": {"orb-time": ["bind:proj-ttl", "ms"]}},
+   {"hw1": ["orbdmg"], "after": ["orb"], "skill": "sorc_ice_orb", "mod": "sorc_orb_damage", "params": {"orb-shard-dmg": ["bind:proj-damage", "id"]}},
+   {"hw1": ["chill"], "skill": "sorc_chill", "unlock": "chill", "params": {}},
+   {"hw1": ["chillslow"], "after": ["chill"], "skill": "sorc_chill", "mod": "sorc_chill_slow", "params": {"chill-slow": ["bind:intensity", "pct"]}},
+   {"hw1": ["chilldur"], "after": ["chill"], "skill": "sorc_chill", "mod": "sorc_chill_duration", "params": {"chill-dur": ["bind:slow-buff", "snap"]}},
+   {"hw1": ["nova"], "skill": "sorc_nova", "unlock": "nova", "params": {}},
+   {"hw1": ["novamana"], "after": ["nova"], "skill": "sorc_nova", "mod": "sorc_nova_mana_cost", "params": {"nova-mana-cost": ["mana-cost", "id"]}},
+   {"hw1": ["novanum"], "after": ["nova"], "skill": "sorc_nova", "mod": "sorc_nova_count", "params": {"nova-shards": ["bind:projectiles-count", "id"]}},
+   {"hw1": ["fshield"], "skill": "sorc_frost_shield", "params": {"shield-chance": ["bind:block-chance", "pct"]}}
+  ],
+  "base": {
+   "shard-projectile": null,
+   "shard-bounce-range-mul": null,
+   "shard-bounce-dmg-mul": null,
+   "comet-dist": null,
+   "comet-freeze": null,
+   "orb-mana-cost": ["sorc_ice_orb", "mana-cost", "id"],
+   "orb-projectile": null,
+   "orb-shard": null
+  }
+ },
+ "thief": {
+  "ae": "thief",
+  "ladders": [
+   {"hw1": ["health"], "skill": "thief_misc_health", "params": {"max-health": ["bind:player-max-health-set", "id"]}},
+   {"hw1": ["mana"], "skill": "thief_misc_mana", "params": {"max-mana": ["bind:player-max-mana-set", "id"], "mana-regen": ["bind:player-mana-regen-set", "inv1000"]}},
+   {"hw1": ["armor"], "skill": "thief_misc_armor", "mod": 0, "params": {"dmg-reduction": ["bind:player-armor-set", "id"]}},
+   {"hw1": ["dmg"], "skill": "thief_knives", "mod": "thief_knives_dmg", "params": {"knives-dmg": ["bind:knives-dmg", "id"]}},
+   {"hw1": ["aspeed"], "skill": "thief_knives", "mod": "thief_knives_speed", "params": {"knives-speed-mod": ["bind:move-speed-mul", "lin 1 1"]}},
+   {"hw1": ["kfandmg"], "skill": "thief_fan", "mod": "thief_fan_dmg", "params": {"kfan-dmg": ["bind:proj-dmg", "id"]}},
+   {"hw1": ["kfanprojs"], "skill": "thief_fan", "mod": "thief_fan_arc", "params": {"kfan-projs": ["bind:fan-projectiles", "id"], "kfan-arc": ["bind:fan-spread", "id"]}},
+   {"hw1": ["fervor"], "skill": "thief_fervor", "params": {"max-fervor": ["bind:fervor-buff", "snap"]}},
+   {"hw1": ["dodge"], "skill": "thief_dodge", "params": {"dodge-chance": ["bind:dodge-chance", "pct"]}},
+   {"hw1": ["chain"], "skill": "thief_chain", "unlock": "chain", "params": {"chain-money-cost": [null, null]}},
+   {"hw1": ["chainrng"], "after": ["chain"], "skill": "thief_chain", "mod": "thief_chain_range", "params": {"chain-range": ["bind:chain-range", "x16"]}},
+   {"hw1": ["chainstn"], "after": ["chain"], "skill": "thief_chain", "mod": "thief_chain_buff", "params": {"chain-buff": ["bind:chain-buff", "snap"]}},
+   {"hw1": ["smoke"], "skill": "thief_smoke", "unlock": "smoke", "params": {"smoke-money-cost": [null, null]}},
+   {"hw1": ["smokerng"], "after": ["smoke"], "skill": "thief_smoke", "mod": "thief_smoke_radius", "params": {"smoke-range": ["bind:smoke-radius", "x16"]}}
+  ],
+  "base": {
+   "knives-arc": null,
+   "knives-arc-gfx": null,
+   "knives-range": null,
+   "kfan-projectile": null,
+   "kfan-mana-cost": ["thief_fan", "mana-cost", "id"],
+   "kfan-money-cost": null,
+   "smoke-buff": null,
+   "smoke-mana-cost": ["thief_smoke", "mana-cost", "id"],
+   "chain-speed": null,
+   "chain-mana-cost": ["thief_chain", "mana-cost", "id"],
+   "money-chance": null
+  }
+ },
+ "warlock": {
+  "ae": "warlock",
+  "ladders": [
+   {"hw1": ["health"], "skill": "warlock_misc_health", "params": {"max-health": ["bind:player-max-health-set", "id"]}},
+   {"hw1": ["mana"], "skill": "warlock_misc_mana", "params": {"max-mana": ["bind:player-max-mana-set", "id"], "mana-regen": ["bind:player-mana-regen-set", "inv1000"]}},
+   {"hw1": ["armor"], "skill": "warlock_misc_armor", "mod": 0, "params": {"dmg-reduction": ["bind:player-armor-set", "id"]}},
+   {"hw1": ["dmg"], "skill": "warlock_dagger", "mod": "warlock_dagger_dmg", "params": {"dagger-dmg": ["bind:dagger-dmg", "id"]}},
+   {"hw1": ["poison"], "skill": "warlock_dagger", "mod": "warlock_dagger_poison", "params": {"poison-dmg": ["bind:dagger-poison", "snap"]}},
+   {"hw1": ["lightningdmg"], "skill": "warlock_lightning", "mod": "warlock_lightning_dmg", "params": {"lightning-dmg": ["bind:proj-damage", "id"]}},
+   {"hw1": ["lightningtrg"], "skill": "warlock_lightning", "mod": "warlock_lightning_bolts", "params": {"lightning-bounces": ["bind:proj-bolts", "id"], "lightning-mana-cost": ["mana-cost", "id"]}},
+   {"hw1": ["storm"], "skill": "warlock_storm", "unlock": "storm", "params": {}},
+   {"hw1": ["stormdmg"], "after": ["storm"], "skill": "warlock_storm", "mod": "warlock_storm_damage", "params": {"storm-dmg": ["bind:cloud-damage", "id"]}},
+   {"hw1": ["stormdur"], "after": ["storm"], "skill": "warlock_storm", "mod": "warlock_storm_duration", "params": {"storm-dur": ["bind:cloud-duration", "ms"]}},
+   {"hw1": ["kmana"], "skill": "warlock_kill_mana", "params": {"kill-mana": ["bind:mana-amount", "id"]}},
+   {"hw1": ["garg"], "skill": "warlock_gargoyle", "unlock": "garg-dmg>0", "params": {}},
+   {"hw1": ["gargdmg"], "after": ["garg"], "skill": "warlock_gargoyle", "mod": "warlock_gargoyle_damage", "params": {"garg-dmg": ["bind:proj-damage", "id"]}},
+   {"hw1": ["gargdur"], "after": ["garg"], "skill": "warlock_gargoyle", "mod": "warlock_gargoyle_duration", "params": {"garg-dur": ["bind:unit-ttl", "ms"], "garg-mana-cost": ["mana-cost", "id"]}},
+   {"hw1": ["kheal"], "skill": "warlock_kill_heal", "params": {"kill-heal": ["bind:trigger-chance", "pct"]}}
+  ],
+  "base": {
+   "poison-dur": null,
+   "garg-projectile": null,
+   "storm-mana-cost": ["warlock_storm", "mana-cost", "id"]
+  }
+ },
+ "wizard": {
+  "ae": "wizard",
+  "ladders": [
+   {"hw1": ["health"], "skill": "wiz_misc_health", "params": {"max-health": ["bind:player-max-health-set", "id"]}},
+   {"hw1": ["mana"], "skill": "wiz_misc_mana", "params": {"max-mana": ["bind:player-max-mana-set", "id"], "mana-regen": ["bind:player-mana-regen-set", "inv1000"]}},
+   {"hw1": ["armor"], "skill": "wiz_misc_armor", "mod": 0, "params": {"dmg-reduction": ["bind:player-armor-set", "id"]}},
+   {"hw1": ["dmg"], "skill": "wiz_fireball", "mod": "wiz_fireball_damage", "params": {"fireball-dmg": ["bind:proj-damage", "id"], "fireball-splash": ["bind:proj-radius", "x16"]}},
+   {"hw1": ["rng"], "skill": "wiz_fireball", "mod": "wiz_fireball_range", "params": {"fireball-range": ["bind:proj-ttl", "interp"], "fireball-projectile": [null, null]}},
+   {"hw1": ["spraydmg"], "skill": "wiz_flame_spray", "mod": "wiz_flame_spray_damage", "params": {"spray-dmg": ["bind:proj-damage", "id"], "spray-mana-cost": ["mana-cost", "id"]}},
+   {"hw1": ["meteor"], "skill": "wiz_meteor", "unlock": "meteor", "params": {}},
+   {"hw1": ["meteornum"], "after": ["meteor"], "skill": "wiz_meteor", "mod": "wiz_meteor_amount", "params": {"meteor-amount": [null, null]}},
+   {"hw1": ["meteordmg"], "after": ["meteor"], "skill": "wiz_meteor", "mod": "wiz_meteor_damage", "params": {"meteor-dmg": ["bind:meteor-damage", "id"]}},
+   {"hw1": ["combust"], "skill": "wiz_combustion", "unlock": "combust", "params": {}},
+   {"hw1": ["combustdmg"], "after": ["combust"], "skill": "wiz_combustion", "mod": "wiz_combustion_damage", "params": {"combust-dmg": ["bind:combustion-damage", "id"]}},
+   {"hw1": ["combustdur"], "after": ["combust"], "skill": "wiz_combustion", "mod": "wiz_combustion_duration", "params": {"combust-dur": ["bind:combustion-buff", "snap"]}},
+   {"hw1": ["fnova"], "skill": "wiz_fire_nova", "unlock": "fnova", "params": {}},
+   {"hw1": ["fnovanum"], "after": ["fnova"], "skill": "wiz_fire_nova", "mod": "wiz_fire_nova_flames", "params": {"fnova-flames": ["bind:nova-flames", "id"], "fnova-ttl": ["bind:proj-ttl", "id"], "fnova-mana-cost": ["mana-cost", "id"]}},
+   {"hw1": ["fnovaslow"], "after": ["fnova"], "skill": "wiz_fire_nova", "mod": "wiz_fire_nova_slow", "params": {"fnova-slow": ["bind:nova-buff", "snap"]}},
+   {"hw1": ["fire-shield"], "skill": "wiz_fire_shield", "unlock": "fire-shield", "params": {}}
+  ],
+  "base": {
+   "fireball-mana-cost": ["wiz_fireball", "mana-cost", "id"],
+   "spray-dist": null,
+   "meteor-mana-cost": ["wiz_meteor", "mana-cost", "id"]
+  }
+ },
+ "shared": {
+  "ae": "shared",
+  "ladders": [
+   {"hw1": ["speed"], "skill": "speed", "mod": "shared_misc_speed_modifier", "params": {"move-speed": ["bind:movespeed-mul", "ratio"]}},
+   {"hw1": ["combo"], "skill": "shared_combo", "unlock": "combo", "params": {}},
+   {"hw1": ["combo-time"], "after": ["combo"], "skill": "shared_combo", "mod": "shared_combo_timer", "params": {"combo-timer": ["bind:combo-timer", "lin 1000 250"]}},
+   {"hw1": ["combo-nova"], "after": ["combo"], "skill": "shared_combo", "mod": "shared_combo_nova", "params": {"combo-nova-dmg": [null, null], "combo-nova-parts": ["bind:combo-nova-parts", "id"], "combo-nova-projectile": [null, null]}},
+   {"hw1": ["combo-heal"], "after": ["combo"], "skill": "shared_combo", "mod": "shared_combo_heal", "params": {"combo-heal": ["bind:combo-heal-buff", "snap"]}},
+   {"hw1": ["combo-mana"], "after": ["combo"], "skill": "shared_combo", "mod": "shared_combo_mana", "params": {"combo-mana": ["bind:combo-mana-buff", "snap"]}}
+  ],
+  "base": {
+   "dmg-mul": null
+  },
+  "power": {
+   "_doc": "HW1 power-shop upgrade id -> AE PowerShopMenuContent item id, name key, AE price.",
+   "life": ["power_life", ".life-uname", ".life-udesc", 350],
+   "rejuv": ["power_rejuv", ".rejuv-uname", ".rejuv-udesc", 175],
+   "pot-dmg": ["potion_damage", ".pot-dmg-uname", ".pot-dmg-udesc", 1000],
+   "pot-rejuv": ["potion_rejuv", ".pot-rejuv-uname", ".pot-rejuv-udesc", 300],
+   "pot-invul": ["potion_invul", ".pot-invul-uname", ".pot-invul-udesc", 300]
+  }
+ }
+}
