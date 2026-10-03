@@ -55,6 +55,10 @@ def cmd_convert(args) -> int:
         print("\nLeft out on purpose:")
         for t, n in report.dropped.most_common():
             print(f"  {n:6d}  {t}")
+    if report.players:
+        print("\nClasses and lives (HW1 tweak/ and info.xml -> AE players/ and scripts/ in the scenario):")
+        for line in report.players:
+            print(f"  {line}")
     for w in report.warnings:
         print(f"warning: {w}")
 
