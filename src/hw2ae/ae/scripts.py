@@ -82,6 +82,8 @@ COLLIDE_STATES = {0: 2, 1: 1, 2: 3}    # enable, disable, toggle -> Enable=2, Di
 FLAG_OFF, FLAG_RUN = 0, 2
 # AE CompareFunc.
 CMP_EQUAL, CMP_GREATER_OR_EQUAL = 1, 4
+# AE CounterMode (ModifyCounter.as): Decrement takes runs off an AE Counter.
+COUNTER_DECREMENT = 3
 # HW1 speech bubbles -> AE dialogs (StartDialog), added to a copy of this table.
 DIALOG_FILE = "tweak/dialogs/dialog_castlehw.sval"
 DIALOG_STYLE = "white_tail"  # AE's speech bubble with a tail, its NPCs' style
@@ -609,17 +611,23 @@ def _convert_simple(n: ScriptNode, ctx: ScriptContext, sid: int, x: float, y: fl
         ])]
 
     if t == "Counter":
-        # Both count their runs and fire their targets from the count on.
+        # HW1 counts down from its count and fires each run that leaves it at
+        # 0 or below (TiltedEngine's Counter.OnExecute); AE counts its runs
+        # up and fires from Count on. The same while nothing adds to it.
         return [Script("Counter", sid, x, y, label=str(_val(p, "count", 1)), params=[
             Param("int", "Count", int(_val(p, "count", 1))),
             Param("ids", "ToExecute", _feed(ctx, _ids(p, "execute"))),
         ])]
 
     if t == "IncrementCounter":
-        # Running an AE Counter is what increments it.
-        link = Script("ScriptLink", sid, x, y)
-        link.connections.extend((c, 0) for c in _feed(ctx, _ids(p, "counter")))
-        return [link]
+        # HW1 adds 1 to the counter: one more run before it fires. In AE that
+        # is one run taken back (Survival Colosseum counts enemies in: +1 per
+        # enemy entering the arena, a run per one dying, "You Survived" at 0).
+        return [Script("ModifyCounter", sid, x, y, label="+1", params=[
+            Param("int", "Mode", COUNTER_DECREMENT),
+            Param("int", "Value", 1),
+            Param("ids", "Counters", _feed(ctx, _ids(p, "counter"))),
+        ])]
 
     if t == "HideObject":
         state = int(_val(p, "state", 1))

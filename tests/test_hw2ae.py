@@ -1070,3 +1070,28 @@ def test_every_stock_item_and_actor_is_mapped_dropped_or_a_known_gap():
     missing = sorted(rel for kind in ("items", "actors") for f in (hw1 / kind).rglob("*.xml")
                      if (rel := f.relative_to(hw1).as_posix()) not in KNOWN_GAPS and r.resolve(rel) is None)
     assert not missing, missing
+
+
+def test_increment_counter_takes_a_run_back(tmp_path):
+    # Survival Colosseum: +1 per enemy entering the arena, a Counter run per one dying, fires at 0.
+    # HW1's Counter counts down and IncrementCounter adds to it, so in AE it takes a run back.
+    node = ('<dictionary><int name="id">{i}</int><string name="type">{t}</string><bool name="enabled">True</bool>'
+            '<int name="trigger-times">-1</int><vec2 name="pos">0 0</vec2>{p}</dictionary>')
+    xml = tmp_path / "l.xml"
+    xml.write_text('<dictionary><dictionary name="scripting"><array name="nodes">'
+                   + node.format(i=683, t="Counter", p='<dictionary name="parameters"><int name="count">0</int>'
+                                 '<dictionary name="execute"><int-arr name="static">685</int-arr></dictionary>'
+                                 '</dictionary>')
+                   + node.format(i=684, t="IncrementCounter", p='<dictionary name="parameters"><dictionary '
+                                 'name="counter"><int-arr name="static">683</int-arr></dictionary></dictionary>')
+                   + node.format(i=685, t="ScriptLink", p="")
+                   + "</array></dictionary></dictionary>")
+    lv = hw1_level.load(xml)
+    out = Level("DungeonGameMode", None)
+    ctx = ScriptContext(out, {}, lambda i: None, warn=lambda m: None)
+    convert_scripts(lv.scripts, ctx)
+    counter, = (s for s in out.scripts if s.cls == "Counter")
+    inc, = (s for s in out.scripts if s.cls == "ModifyCounter")
+    assert Param("int", "Count", 0) in counter.params
+    assert Param("int", "Mode", 3) in inc.params and Param("int", "Value", 1) in inc.params
+    assert Param("ids", "Counters", [counter.id]) in inc.params and not inc.connections
