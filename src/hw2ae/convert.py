@@ -13,8 +13,9 @@ from .ae import doors, level_writer, players, scenario
 from .ae.assets import AssetIndex
 from .ae.custom import CustomUnits
 from .ae.model import Level, PrefabPlacement, Unit
-from .ae.scripts import DIALOG_FILE, ScriptContext, convert_scripts, dialog_file
+from .ae.scripts import DIALOG_FILE, ScriptContext, convert_scripts, dialog_file, hit_targets
 from .ae.tiles import TileLayers
+from .ae.walkway import walkway_unit
 from .hw1 import campaign as hw1_campaign
 from .hw1 import level as hw1_level
 from .hw1 import tweak as hw1_tweak
@@ -28,6 +29,9 @@ DEFAULT_ENV = "effects/lighting/prison_1.env"
 BRIGHT_ENV = "effects/lighting/bonus.env"
 BRIGHT_AMBIENT = 128
 EXIT_WIDTH = 64
+# HW1's doodad layer that HW2A000FF ports as AE layer 0 (a ``defaultlayer`` L
+# becomes L - 20); a placed doodad's own HW1 layer is on the same scale.
+HW1_DEFAULT_LAYER = 20
 # Tiles (left, up, right, down) a floor's bottom layer reaches past the HW1
 # floor, so its border hides under the walls as in AE's own levels. HW1 floors
 # stop 1 tile short of left/top walls but 2 short of bottom walls, and AE's
@@ -142,13 +146,24 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
     exits: list[Unit] = []
     door_pieces = []
     bosses: list[tuple[int, str]] = []  # (AE id, boss bar title)
+    hit = hit_targets(lv.scripts)
+    scenario_dir = porter.scenario_dir if porter is not None else (custom.out if custom is not None else None)
     for o in lv.all_objects():
         r = resolver.resolve(o.type)
+        layer = None
         if r is None:
             ported = _custom_or_ported(o.type, custom, porter, report)
             if ported is None:
                 report.unmapped[o.type] += 1
                 continue
+            if porter is not None and porter.ported.get(o.type.replace("\\", "/")) == ported:
+                # HW1 art keeps HW1's draw order: the instance's layer on the
+                # base HW2A000FF gives the doodad's own defaultlayer.
+                if o.layer is not None:
+                    layer = o.layer - HW1_DEFAULT_LAYER
+                if o.id in hit:
+                    ported = porter.hittable(ported)
+                    report.ported[f"{o.type} (hittable: Breakable, for a Hit trigger)"] += 1
             # A ported unit keeps HW1's sprite origin: no offset.
             r = Placement("unit", ported)
         if isinstance(r, Dropped):
@@ -158,6 +173,11 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
         if r.door is not None:
             door_pieces.append((o, r.door))
             continue
+        if r.kind == "unit" and scenario_dir is not None:
+            walk = walkway_unit(r.path, ae_assets, scenario_dir, f"{PORTED_ROOT}/{name_id}")
+            if walk is not None:
+                r = dataclasses.replace(r, path=walk)
+                report.ported[f"{o.type} (walkway widened for AE's larger player)"] += 1
         x, y = o.x * TILE + r.dx, o.y * TILE + r.dy
         if r.kind == "prefab":
             out.prefabs.append(PrefabPlacement(r.path, x, y))
@@ -165,6 +185,8 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
         uid = out.new_id()
         id_map[o.id] = uid
         state = {k: ("string", v) for k, v in r.params.items()}
+        if layer is not None:
+            state["layer"] = ("int", layer)
         u = Unit(r.path, x, y, uid, state)
         out.units.append(u)
         if r.is_exit:

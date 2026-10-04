@@ -566,6 +566,16 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
 # HW1 ObjectEventTrigger event -> AE trigger. The generator writes Destroyed as "0".
 OBJECT_EVENTS = {"Hit": "UnitDamagedTrigger", "Destroyed": "UnitDestroyedTrigger", "0": "UnitDestroyedTrigger",
                  "StateChanged": "UnitSceneChangedTrigger"}
+
+
+def hit_targets(nodes: list[ScriptNode]) -> set[int]:
+    """Placed HW1 objects an ``ObjectEventTrigger`` watches for ``Hit``. AE
+    only reports damage to units with a damage-taking behaviour."""
+    out: set[int] = set()
+    for n in nodes:
+        if n.type == "ObjectEventTrigger" and str(_val(n.params, "event", "")) == "Hit":
+            out.update(_ids(n.params, "object"))
+    return out
 # HW1 nodes AE has no world script for; kept as plain links and reported once.
 NO_AE_NODE = {
     "MoveAI": "AE has no script that walks an actor along path nodes; spawned enemies attack directly",

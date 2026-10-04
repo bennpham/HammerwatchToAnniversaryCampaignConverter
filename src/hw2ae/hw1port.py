@@ -65,6 +65,25 @@ def normalize_materials(scenario_dir: Path) -> int:
     return changed
 
 
+# Breakable health per scene (AE reads it from the current scene's data, as
+# doodads/traps/wooden_stake.unit sets it); every hit takes at least 1.
+UNBREAKABLE_HEALTH = 1000000
+_SCENE_OPEN = re.compile(r'<scene(?:\s+name="([^"]*)")?\s*>')
+
+
+def make_hittable(unit_text: str) -> str:
+    """A ported unit with AE's ``Breakable`` behaviour and health in every
+    scene, so hits register and it never breaks."""
+    text = re.sub(r"(<unit\b[^>]*>)", r'\1\n  <behavior class="Breakable">\n  </behavior>', unit_text, count=1)
+
+    def health(m: re.Match) -> str:
+        if m.group(1) == "hwport_shared":  # included by the others
+            return m.group(0)
+        return f'{m.group(0)}\n      <data name="health"><int>{UNBREAKABLE_HEALTH}</int></data>'
+
+    return _SCENE_OPEN.sub(health, text)
+
+
 def _pow2(n: int) -> int:
     return 1 << max(0, n - 1).bit_length()
 
@@ -114,6 +133,18 @@ class Porter:
 
     def port_tileset(self, hw1_path: str) -> str | None:
         return self._port(hw1_path, "tileset", "tileset")
+
+    def hittable(self, ae_path: str) -> str:
+        """A copy of a ported doodad that attacks can hit, for a HW1 ``Hit``
+        trigger: AE's swings and projectiles only damage units whose behaviour
+        takes damage. ``Breakable`` with health no hit uses up (Pirate Cove's
+        dig spots take three)."""
+        hit_path = ae_path[: -len(".unit")] + "_hit.unit"
+        dst = self.scenario_dir / hit_path
+        if not dst.exists():
+            dst.write_text(make_hittable((self.scenario_dir / ae_path).read_text(encoding="utf-8")),
+                           encoding="utf-8", newline="")
+        return hit_path
 
     def _port(self, hw1_path: str, root_name: str, ext: str) -> str | None:
         key = hw1_path.replace("\\", "/")

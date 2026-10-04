@@ -11,7 +11,8 @@ author's hit points kept. The copy lives in the scenario under
 Twins:
 * items and spawners: the stock HW1 object with the same behaviour and values
   (heal amount, spawned enemies), through ``units.json``;
-* a custom ``collectable``: AE's hidden walk-over collectable (``sphere``);
+* a custom ``collectable``: AE's walk-over collectable (``sphere``), without
+  the sphere's orb and effect;
 * actors: the AE unit that fights the same way (movement, skills, buffs),
   preferring the same kind of creature (``skeleton`` in both names).
 """
@@ -31,6 +32,8 @@ from .. import scale
 
 PORTED_ROOT = "hw1"
 COLLECTABLE_TWIN = "items/pickups/collectable_10_sphere.unit"
+# AE's item sprite material (most of items/), for a twin with no sprite of its own.
+ITEM_MATERIAL = "items/items.mats:item"
 # The stock spawner whose AE unit carries a mission spawner's own spawns.
 GENERIC_SPAWNER = "actors/spawners/skeleton_1.xml"
 # AE units that are not enemies to copy: projectiles, bombs, effects, NPCs.
@@ -297,7 +300,7 @@ class CustomUnits:
         else:
             text = self._item_scenes(text, sprites)
             if twin == COLLECTABLE_TWIN:
-                text = self._collectable_text(text, _entries(root).get("pickup-text", ""))
+                text = self._collectable_text(text, _entries(root).get("pickup-text", ""), PurePosixPath(key).stem)
         out_rel =f"{self.prefix}/{PurePosixPath(key).with_suffix('.unit')}"
         dst = self.out / out_rel
         dst.parent.mkdir(parents=True, exist_ok=True)
@@ -357,14 +360,24 @@ class CustomUnits:
         return f'<collision static="true">{"".join(shapes)}</collision>' if shapes else None
 
     @staticmethod
-    def _collectable_text(text: str, pickup_text: str) -> str:
-        """The sphere twin announces itself (its tutorial line, its icon);
-        the mission's item says its own pickup text instead."""
+    def _collectable_text(text: str, pickup_text: str, name: str) -> str:
+        """The sphere twin announces itself (its tutorial line, its icon),
+        counts towards AE's combo spheres and is drawn as a bouncing orb; the
+        mission's item only says its own pickup text and shows its own art.
+        HW1's collectable did nothing else: the mission's scripts react to it.
+
+        AE only picks an item up if an effect other than ShowFloatingText can
+        apply (Pickup.as), so the combo sphere becomes a level flag, which
+        applies to any player and changes nothing else."""
         from xml.sax.saxutils import escape
         text = re.sub(r'(<string name="class">ShowFloatingText</string>\s*<string name="text">)[^<]*',
                       lambda m: m.group(1) + escape(pickup_text), text, count=1)
-        for cls in ("AnnouncePickup",):
-            text = re.sub(rf'\s*<dict>\s*<string name="class">{cls}</string>.*?</dict>', "", text, count=1, flags=re.S)
+        text = re.sub(r'(<dict>\s*<string name="class">)GiveCollectable(</string>).*?(</dict>)',
+                      lambda m: f'{m.group(1)}SetFlag{m.group(2)}\n\t\t\t\t<string name="flag">hw1_picked_{escape(name)}'
+                                f'</string>\n\t\t\t\t<bool name="value">true</bool>\n\t\t\t{m.group(3)}',
+                      text, count=1, flags=re.S)
+        text = re.sub(r'\s*<dict>\s*<string name="class">AnnouncePickup</string>.*?</dict>', "", text, count=1, flags=re.S)
+        text = re.sub(r'\s*<group\b[^>]*>(?:(?!</group>).)*?combo_sphere.*?</group>', "", text, flags=re.S)
         return re.sub(r'\s*<dict>\s*<array name="graphic-world">.*?</dict>', "", text, count=1, flags=re.S)
 
     def _texture(self, hw1_tex: str) -> str | None:
@@ -404,19 +417,29 @@ class CustomUnits:
         return (f'{indent}<sprite origin="{origin}" looping="true" texture="{path}" material="{material}">\n'
                 + "\n".join(frames) + f"\n{indent}</sprite>")
 
-    def _material(self, text: str) -> str:
+    def _material(self, text: str, default: str = "system/default.mats:enemy") -> str:
         mats = re.findall(r'<sprite[^>]*material="([^"]+)"', text)
-        return max(set(mats), key=mats.count) if mats else "system/default.mats:enemy"
+        return max(set(mats), key=mats.count) if mats else default
 
     def _item_scenes(self, text: str, sprites: dict[str, ET.Element]) -> str:
+        """The item's art replaces the twin's first sprite. A sprite inside a
+        ``<light>`` is the light's mask, not art; a twin drawn only by effects
+        (the sphere) gets the art added ahead of its lights."""
         hw1 = _first(sprites, "default", *sprites)
         if hw1 is None:
             return text
-        mat = self._material(text)
+        mat = self._material(text, ITEM_MATERIAL)
         new = self._ae_sprite(hw1, mat, "\t\t\t")
         if new is None:
             return text
-        return re.sub(r"[ \t]*<sprite\b[^>]*>.*?</sprite>", lambda m: new, text, count=1, flags=re.S)
+        lights = [(m.start(), m.end()) for m in re.finditer(r"<light\b.*?</light>", text, flags=re.S)]
+        for m in re.finditer(r"[ \t]*<sprite\b[^>]*>.*?</sprite>", text, flags=re.S):
+            if not any(a <= m.start() < b for a, b in lights):
+                return text[:m.start()] + new + text[m.end():]
+        at = lights[0][0] if lights else text.find("</scene>")
+        if at < 0:
+            return text
+        return text[:at] + new.lstrip() + "\n\t\t\t" + text[at:]
 
     def _actor_scenes(self, text: str, sprites: dict[str, ET.Element]) -> str:
         """Each AE scene (``idle-3``, ``walk-0``, ``smash-5``, ``whirlwind``)
