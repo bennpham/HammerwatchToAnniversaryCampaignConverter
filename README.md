@@ -74,7 +74,11 @@ correspondences and pixel offsets.
   the walls above and below.
 - **Enemies** are matched on identical hit points (e.g. `skeleton_1_small` → `skeleton_warrior_weak`,
   `lich_3` → `skeleton_necromancer`, `tick_1_elite` → `tick_gold`).
-- **Bosses.** All six HW1 bosses (dragon, knight, lich, krilith, worm, anubis) map to the
+  Pickups are matched on their values, not their names: HW1's `health_3` heals 75 like AE's
+  `health_4`. Temple of the Sun's enemies were paired by how many of each stand on each of its
+  15 levels in both games, plus shared buffs (`mummy_1` → `mummy_soldier`, `lich_desert_1`'s frost
+  → `mummy_lich_ice`, the tracking towers' fire/ice/drain beams → `tower_laser_*`).
+- **Bosses.** All seven HW1 bosses (queen, dragon, knight, lich, krilith, worm, anubis) map to the
   same-named AE boss and fight without level scripts. Each kind of boss in a level gets its
   own AE boss bar, titled as AE's campaigns title it. "Boss N%" / "Boss Died" become health and
   death triggers on the bosses, and the generator's multi-boss countdown (`Variable` /
@@ -141,11 +145,18 @@ new; the converter lists everything it couldn't map with counts.
 
 - Complete for the random dungeon generator's classic themes (`a`–`d`): every asset it
   places, all its script nodes, shops and exits.
-- Castle themes `e`–`g` and the desert themes `h`/`i` have no AE mapping yet: with the `port`
-  extra they are ported as HW1 art, otherwise reported. HW1 light entries and prefabs are not
-  converted yet; they are reported, never guessed. `learn` against Temple of the Sun
-  (`PACKAGER.exe -u scenarios/sun_temple.h1c -d <dir>` next to `Hammerwatch/editor/campaign2`)
-  is the way to extend it.
+- Themes `e`–`i` are Temple of the Sun's. Pairing HW1's `campaign2` with AE's `sun_temple`
+  (`PACKAGER.exe -u scenarios/sun_temple.h1c -d <dir>`, then `learn campaign2/levels --ae-levels
+  <dir>/levels/sun_temple`) maps `e` (desert cave), `f` (crystal cave), `g` (pyramid) and `i`
+  (fancy pyramid) walls, doors and floors to AE's remakes. `f`'s walls follow `e`'s rules (the
+  same AE piece set; too few paired walls to confirm). The outdoor desert `h` keeps its floor
+  mapping but its cliff walls stay ported: AE rebuilt them from different pieces.
+- Every stock HW1 item and actor maps to AE, is dropped with a reason (player looks, a test
+  item), or is a known gap with no AE counterpart, listed in the tests (`KNOWN_GAPS`): thrown
+  bombs, furniture, the bonus letters, `lich_desert_2`, `floater_fire`, a few scripted boss props.
+  Props whose HW1 states AE renamed (traps, boss locks) stay ported, so level scripts that switch
+  them keep working. HW1 light entries and prefabs are not converted yet; they are reported,
+  never guessed.
 - Verified by: the unit tests, `validate` (every path resolves in AE), and rendered previews.
   In-game behaviour (exits, shops, the win screen) still needs a playthrough.
 

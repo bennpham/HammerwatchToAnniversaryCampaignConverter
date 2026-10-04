@@ -65,6 +65,7 @@ class Placement:
     params: dict = field(default_factory=dict)
     is_exit: bool = False
     door: DoorPiece | None = None
+    key: str | None = None  # a single-unit door: the collectable its DoorController takes
 
 
 @dataclass(frozen=True)
@@ -113,7 +114,7 @@ class Resolver:
             if "prefab" in entry:
                 return self._checked(Placement("prefab", entry["prefab"], entry.get("dx", 0), entry.get("dy", 0)))
             return self._checked(Placement("unit", entry["ae"], entry.get("dx", 0), entry.get("dy", 0),
-                                           dict(entry.get("params", {}))))
+                                           dict(entry.get("params", {})), key=entry.get("key")))
 
         m = WALL_RE.match(p)
         if m:
@@ -141,7 +142,10 @@ class Resolver:
         if theme is None:
             return None
         folder = f"doodads/walls/{theme['walls']}"
-        cands = WALL_PIECES.get(piece, []) + [(piece, 0, 0)]
+        # A theme's own pieces where AE built it differently (Temple of the
+        # Sun's caves use h/v where the castle uses h_32/v_32), as paired.
+        own = [tuple(theme["pieces"][piece])] if piece in theme.get("pieces", {}) else []
+        cands = own + WALL_PIECES.get(piece, []) + [(piece, 0, 0)]
         for name, dx, dy in cands:
             path = f"{folder}/{name}.unit"
             if self.assets.exists(path):
