@@ -8,5 +8,13 @@
   "bonus2": {"name": "bonus 2", "walls": "bonus2", "hw1_origins": true, "doors": "prison", "env": "effects/lighting/bonus.env"},
   "bonus3": {"name": "bonus 3", "walls": "bonus3", "hw1_origins": true, "doors": "prison", "env": "effects/lighting/bonus.env"},
   "bonus4": {"name": "bonus 4", "walls": "bonus4", "hw1_origins": true, "doors": "prison", "env": "effects/lighting/bonus.env"},
-  "bonus5": {"name": "bonus 5", "walls": "bonus5", "hw1_origins": true, "doors": "prison", "env": "effects/lighting/bonus.env"}
+  "bonus5": {"name": "bonus 5", "walls": "bonus5", "hw1_origins": true, "doors": "prison", "env": "effects/lighting/bonus.env"},
+  "_temple": "Temple of the Sun themes, by pairing HW1's campaign2 with AE's sun_temple: each letter's wall pieces land in one AE folder (e 811 paired hits in cave_desert, g 2770 in pyramid_inside, i 775 in pyramid_fancy); 'env' is what AE's levels of that theme use. 'pieces' are where AE built a theme differently, [AE piece, dx, dy] as paired (cave runs use h/v, not h_32/v_32; the fancy temple draws its upper-left corners with v). Theme f (crystal cave) has too few paired walls to confirm (22 placements), but AE's cave_crystal has exactly cave_desert's pieces and its floors pair 93-100 % with Krilith's crystal cave, so it takes e's rules. Theme h (outdoor desert, rebuilt as different cliff pieces) stays ported.",
+  "e": {"name": "desert cave", "walls": "cave_desert", "doors": "desert", "env": "effects/env/wolfcave.env",
+        "pieces": {"h_16": ["h", 0, 0], "v_16": ["v", 0, -16]}},
+  "f": {"name": "crystal cave", "walls": "cave_crystal", "doors": "desert", "env": "effects/env/wolfcave.env",
+        "pieces": {"h_16": ["h", 0, 0], "v_16": ["v", 0, -16]}},
+  "g": {"name": "pyramid", "walls": "pyramid_inside", "doors": "desert", "env": "effects/lighting/pyramid_slum_1.env"},
+  "i": {"name": "fancy pyramid", "walls": "pyramid_fancy", "doors": "desert", "env": "effects/lighting/pyramid_fancy_2.env",
+        "pieces": {"v_16": ["v", 0, -16], "crn_l_up": ["v", 0, 16]}}
 }

@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 from .ae import doors, level_writer, players, scenario
 from .ae.assets import AssetIndex
 from .ae.custom import CustomUnits
-from .ae.model import Level, PrefabPlacement, Unit
+from .ae.model import Level, Param, PrefabPlacement, Script, Unit
 from .ae.scripts import DIALOG_FILE, ScriptContext, convert_scripts, dialog_file, hit_targets
 from .ae.tiles import TileLayers
 from .ae.walkway import walkway_unit
@@ -40,6 +40,7 @@ BOTTOM_LAYER_GROW = (1, 1, 2, 2)
 # AE boss units, each with its boss bar title as AE's own boss levels name it
 # (beastiary.lang). HW1 bosses broadcast "Boss N%" events; AE watches these.
 BOSS_BAR_NAMES = {
+    "actors/bosses/boss_queen/boss_queen.unit": ".ig.boss1",
     "actors/bosses/boss_dragon/boss_dragon.unit": ".ig.boss4",
     "actors/bosses/boss_knight/boss_knight.unit": ".ig.boss2",
     "actors/bosses/boss_lich/boss_lich.unit": ".ig.boss3",
@@ -191,6 +192,13 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
         out.units.append(u)
         if r.is_exit:
             exits.append(u)
+        if r.key is not None:
+            # A one-piece door (the bonus doors) opens through its own
+            # DoorController, as AE's Castle bonus levels wire them.
+            out.scripts.append(Script("DoorController", out.new_id(), x, y - 2 * TILE, label=r.key, params=[
+                Param("ids", "Doors", [uid]),
+                Param("string", "Collectable", r.key),
+            ]))
         if r.path in BOSS_BAR_NAMES:
             bosses.append((uid, BOSS_BAR_NAMES[r.path]))
         elif custom is not None and (title := custom.boss_title(o.type)) is not None:

@@ -302,6 +302,43 @@ def test_bosses_and_upgrades_are_mapped():
         assert r.resolve(f"actors/boss_{boss}/boss_{boss}.xml").path == f"actors/bosses/boss_{boss}/boss_{boss}.unit"
     for up in ("damage", "defense", "damage_2", "defense_2", "health_2", "mana_2"):
         assert r.resolve(f"items/upgrade_{up}.xml").path == f"items/pickups/upgrade_{up}.unit"
+    assert r.resolve("actors/boss_queen/boss_queen.xml").path == "actors/bosses/boss_queen/boss_queen.unit"
+    # By heal value, not name: HW1 health_3 heals 75 like AE's health_4, health_4 50 like AE's health_3.
+    assert r.resolve("items/health_3.xml").path == "items/pickups/health_4.unit"
+    assert r.resolve("items/health_4.xml").path == "items/pickups/health_3.unit"
+
+
+def test_bonus_door_gets_its_key_controller():
+    from hw2ae.convert import BOSS_BAR_NAMES, Report, convert_level
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    door = r.resolve("items/bonus_door_h_32.xml")
+    assert door.path == "doodads/doors/door_h_32_bonus.unit" and door.key == "key_bonus"
+    assert r.resolve("items/bonus_key.xml").path == "items/pickups/key_bonus.unit"
+    assert BOSS_BAR_NAMES["actors/bosses/boss_queen/boss_queen.unit"] == ".ig.boss1"
+
+    lv = hw1_level.Level(path=Path("l.xml"), layers={}, doodads=[], actors=[], scripts=[], prefabs=[], lights=[],
+                         ambient=None, items=[hw1_level.Obj(1, "items/bonus_door_h_32.xml", 2, 3)])
+    out = convert_level(lv, r, Path("."), Report(), lambda i: None)
+    unit, = out.units
+    ctrl, = (s for s in out.scripts if s.cls == "DoorController")
+    assert Param("ids", "Doors", [unit.id]) in ctrl.params and Param("string", "Collectable", "key_bonus") in ctrl.params
+
+
+def test_temple_of_the_sun_themes_and_enemies():
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    # Cave runs are AE's h/v; the pyramid keeps the castle's h_32; desert doors for every Temple theme.
+    e = r.resolve("doodads/theme_e/e_h_16.xml")
+    assert (e.path, e.dx, e.dy) == ("doodads/walls/cave_desert/h.unit", 0, 0)
+    assert r.resolve("doodads/theme_g/g_h_16.xml").path == "doodads/walls/pyramid_inside/h_32.unit"
+    i = r.resolve("doodads/theme_i/i_crn_l_up.xml")
+    assert (i.path, i.dy) == ("doodads/walls/pyramid_fancy/v.unit", 16)
+    assert r.resolve("items/door_g_gold_h.xml").door.theme == "desert"
+    assert r.resolve("doodads/theme_h/h_h_16_up.xml") is None  # rebuilt by AE: stays ported
+    m = "actors/undead/mummies/"
+    for hw1, ae in (("guard_desert_1", m + "mummy_guard"), ("mummy_1", m + "mummy_soldier"),
+                    ("lich_desert_1", m + "mummy_lich_ice"), ("spider_1", "actors/beasts/spiders/spider_poison"),
+                    ("tower_tracking_2", "actors/towers/tower_laser_ice")):
+        assert r.resolve(f"actors/{hw1}.xml").path == f"{ae}.unit"
 
 
 def test_multi_boss_counter_opens_the_gate():
@@ -999,3 +1036,37 @@ def test_ported_doodads_keep_hw1_layers_and_take_hits(tmp_path):
     assert 'class="Breakable"' in (scenario / c.path).read_text()
     trig, = [s for s in out.scripts if s.cls == "UnitDamagedTrigger"]
     assert Param("ids", "Units", [c.id]) in trig.params
+
+
+# Stock HW1 items/actors with no AE counterpart found, and why (README "Coverage and known gaps").
+KNOWN_GAPS = {
+    # bombs and shots enemies throw, not placed in levels
+    "items/bomb_boss_krilith.xml", "items/bomb_drain.xml", "items/bomb_floater_fire.xml",
+    "items/bomb_lich_desert_1.xml", "items/bomb_lich_desert_2.xml", "items/bomb_stalactite.xml",
+    "items/bomb_stalactite_e.xml", "items/bomb_wisp_1.xml", "items/bomb_wisp_1_small.xml", "items/bomb_wisp_2.xml",
+    "items/ranger_bomb.xml", "actors/boss_knight/lich_projectile.xml",
+    "actors/boss_dragon/fireball_trap.xml", "actors/boss_dragon/firespray.xml",
+    # no AE unit: Temple's archery reward, crystals, furniture, letters, extra lives, shovel
+    "items/collectable_4.xml", "items/crystal_green.xml", "items/crystal_red.xml",
+    *(f"items/furniture_{p}.xml" for p in ("chair_a", "chair_a_v2", "chair_a_v3", "chair_b", "chair_b_v2",
+                                           "chair_b_v3", "table_a", "table_a_v2", "table_b", "table_b_v2",
+                                           "table_b_v3")),
+    *(f"items/letter_{c}.xml" for c in "acehmrtw"),
+    "items/powerup_5up.xml", "items/powerup_7up.xml", "items/tool_shovel.xml",
+    # no AE counterpart: lich_desert_2's confusion bolt, the fire floater, a desert NPC, scripted boss props
+    "actors/lich_desert_2.xml", "actors/floater_fire.xml", "actors/npc_guard_desert_1.xml",
+    "actors/boss_krilith/boss_krilith_static.xml", "actors/boss_krilith/collision_skeleton_1_mb.xml",
+    "actors/slime_1_host_razed.xml", "actors/tower_battlement_archer_3_razed.xml",
+    "actors/spawners/bonus/skeleton_1.xml",
+}
+
+
+def test_every_stock_item_and_actor_is_mapped_dropped_or_a_known_gap():
+    from hw2ae.config import find_hw1_assets
+    hw1 = find_hw1_assets()
+    if hw1 is None:
+        pytest.skip("HW1's extracted assets are not available")
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    missing = sorted(rel for kind in ("items", "actors") for f in (hw1 / kind).rglob("*.xml")
+                     if (rel := f.relative_to(hw1).as_posix()) not in KNOWN_GAPS and r.resolve(rel) is None)
+    assert not missing, missing
