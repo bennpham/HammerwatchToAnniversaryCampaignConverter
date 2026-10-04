@@ -95,11 +95,19 @@ correspondences and pixel offsets.
   is dropped; an unknown node is kept as a `ScriptLink` so its links still fire, and reported.
   `AllPlayersAreaTrigger` (teleporter pads) fires its targets through AE's `OnAllEntered`;
   a `LevelExitArea` with no shape becomes a lone `LevelExit` the pad executes; `PlaySound`
-  takes the AE FMOD event listed in `sounds.json`.
+  takes the AE FMOD event listed in `sounds.json`. `PlayMusic` picks AE's music for the Castle
+  area where HW1 plays that track (HW1 plays `act4` in the archives and `act3` in the chambers).
+  `ObjectEventTrigger(Hit)` → `UnitDamagedTrigger`; AE only reports damage to units with a
+  damage-taking behaviour, so a ported doodad it watches (Pirate Cove's dig spots) gets a copy
+  with AE's `Breakable` behaviour and health no hit uses up.
 - **Ported HW1 art.** Doodads and tilesets that map to nothing AE ships (a mission's own
   custom doodads, water, the castle/desert themes, many props) are converted from their HW1
   XML/PNG with [HW2A000FF](https://github.com/bennpham/HW2A000FF-AllPlatform-Remake) and
-  shipped inside the scenario under `hw1/<id>/`, keeping the HW1 look. Custom files come from
+  shipped inside the scenario under `hw1/<id>/`, keeping the HW1 look. A placed piece's own HW1
+  `layer` carries over on the scale HW2A000FF gives `defaultlayer` (HW1 20 = AE 0), so ported
+  art keeps HW1's draw order (a boat's rower stays on top of the boat). AE's player is wider
+  than HW1's (collision radius 5.5 vs 3.5), so the chambers bridge planks, whose rails leave a
+  10-11 px walkway, get a scenario copy with each rail moved back 2 px. Custom files come from
   the mission folder, stock ones from HW1's extracted assets (`Hammerwatch/editor/assetsExtract`,
   written by HW1's `ResourceExtractor.exe`; override with `--hw1-assets`). Items and actors are
   never ported: their gameplay parameters differ between the engines. Any unit or tileset in

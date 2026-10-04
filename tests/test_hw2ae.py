@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -225,7 +226,9 @@ def test_floor_button_and_level_music():
     music, ambience = by_cls["PlayMusic"]
     # Its <int-arr name="delays">3521</int-arr> is the target's id, not a time.
     assert start.execute_on_start and start.connections == [(music.id, 0)]
-    assert Param("int", "Music", 4) in music.params          # act4: chambers
+    # HW1's Castle plays act4 in the archives (levels 7-9): AE's archives region.
+    assert Param("int", "Music", 5) in music.params
+    assert Param("int", "Music", 3) in ambience.params
     assert Param("bool", "Ambience", True) in ambience.params and music.connections == [(ambience.id, 0)]
 
     # The button destroys the seal wall (ids in a bare int-arr) and shows as pressed.
@@ -441,6 +444,40 @@ def test_porter_ships_custom_doodads_inside_the_scenario(tmp_path):
     assert "system/default.mats:" in text and "hammerwatch.mats" not in text
     assert (scenario / "hw1/my_dungeon/doodads/level1/c_blood.png").is_file()
     assert porter.port_unit("items/not_here.xml") is None
+
+
+def test_plank_walkways_widen_by_the_player_size_difference():
+    from hw2ae.ae.walkway import WALKWAYS, widen
+    # AE's special_bridge_plank_p1 (= HW1's): rails above and below a 10-11 px walkway.
+    p1 = ('<collision static="true"><polygon><point>0 5</point><point>0 -8</point><point>28 -8</point>'
+          '<point>28 1</point></polygon><polygon><point>30 20</point><point>30 11</point><point>1 16</point>'
+          '<point>1 20</point></polygon></collision>')
+    assert widen(p1) == ('<collision static="true"><polygon><point>0 3</point><point>0 -10</point>'
+                         '<point>28 -10</point><point>28 -1</point></polygon><polygon><point>30 22</point>'
+                         '<point>30 13</point><point>1 18</point><point>1 22</point></polygon></collision>')
+    # p5 runs vertically: its rails move left and right.
+    p5 = ('<polygon><point>-8 27</point><point>2 1</point></polygon>'
+          '<polygon><point>16 27</point><point>11 1</point></polygon>')
+    assert widen(p5) == ('<polygon><point>-10 27</point><point>0 1</point></polygon>'
+                         '<polygon><point>18 27</point><point>13 1</point></polygon>')
+    assert widen("<polygon><point>0 0</point></polygon>") == "<polygon><point>0 0</point></polygon>"
+    assert WALKWAYS.match("doodads/walls/chambers/special_bridge_plank_p4.unit")
+    assert not WALKWAYS.match("doodads/walls/chambers/special_bridge_p1.unit")
+
+
+def test_make_hittable_adds_breakable_and_health_per_scene():
+    from hw2ae.hw1port import UNBREAKABLE_HEALTH, make_hittable
+    ported = ('<unit slot="doodad">\n  <scenes start="hwport_def">\n    <scene name="hwport_shared">\n'
+              '      <collision static="true"><circle offset="0 0" radius="5" /></collision>\n    </scene>\n'
+              '    <scene name="closed">\n\t  <scene src="hwport_shared" />\n    </scene>\n'
+              '    <scene name="hwport_def">\n\t  <scene src="hwport_shared" />\n    </scene>\n  </scenes>\n</unit>')
+    text = make_hittable(ported)
+    assert text.startswith('<unit slot="doodad">\n  <behavior class="Breakable">')
+    health = f'<data name="health"><int>{UNBREAKABLE_HEALTH}</int></data>'
+    # Every scene a unit can be in has health; the shared one is only included.
+    assert text.count(health) == 2
+    assert f'<scene name="hwport_shared">\n      <collision' in text
+    assert f'<scene name="closed">\n      {health}' in text
 
 
 # -- doors -----------------------------------------------------------------
@@ -805,6 +842,13 @@ def test_custom_items_and_actors_keep_hw1_looks(tmp_path):
 
     key = (out / cu.unit("items/my_key.xml")).read_text()
     assert "Shovel!" in key and "AnnouncePickup" not in key and ".tut.i.sphere" not in key
+    # Its own art, not the sphere's orb, and no combo sphere for picking it up.
+    assert "combo_sphere" not in key and "GiveCollectable" not in key
+    # AE won't pick up an item whose only effect is its floating text.
+    assert re.search(r'<string name="class">SetFlag</string>\s*<string name="flag">hw1_picked_my_key</string>'
+                     r'\s*<bool name="value">true</bool>', key)
+    art = key.index('texture="hw1/m/items/pie.png" material="items/items.mats:item"')
+    assert art < key.index("<light") and key.count("effects/lights/light_L.png") == 2
 
     # Melee + whirlwind + bloodlust on a skeleton -> Castle's skeleton guard,
     # with HW1's art per facing (AE index 0 = east, clockwise) and its hp.
@@ -911,3 +955,47 @@ def test_scene_swap_handles_scenes_inside_scenes(tmp_path):
     unit = cu._actor_scenes(bat, _sprites(_hw1_xml(m / "actors" / "civ.xml")))
     assert _xml_error(unit) is None
     assert len(re.findall(r"<scene\b[^>]*?(?<!/)>", unit)) == unit.count("</scene>")
+
+
+@needs_ae
+def test_ported_doodads_keep_hw1_layers_and_take_hits(tmp_path):
+    from hw2ae import hw1port
+    from hw2ae.ae.assets import AssetIndex
+    from hw2ae.convert import Report, convert_level
+    if not hw1port.AVAILABLE:
+        pytest.skip("HW2A000FF is not installed")
+    import shutil
+    mission = tmp_path / "mission"
+    shutil.copytree(Path(__file__).parent / "fixtures" / "custom_art", mission)
+    _png(mission / "doodads" / "level1" / "c_blood.png")
+    piece = "doodads/level1/c_h_16.xml"
+    lvl = mission / "levels" / "l.xml"
+    lvl.parent.mkdir()
+    # Pirate Cove's boat rower: layer 25 over a boat at HW1's default (20).
+    lvl.write_text(
+        '<dictionary><dictionary name="doodads"><array name="doodads">'
+        f'<dictionary><int name="id">1</int><string name="type">{piece}</string><vec2 name="pos">0 0</vec2>'
+        '<int name="layer">25</int></dictionary>'
+        f'<dictionary><int name="id">2</int><string name="type">{piece}</string><vec2 name="pos">4 0</vec2>'
+        '</dictionary>'
+        f'<dictionary><int name="id">3</int><string name="type">{piece}</string><vec2 name="pos">8 0</vec2>'
+        '</dictionary></array></dictionary>'
+        '<dictionary name="scripting"><array name="nodes"><dictionary><int name="id">10</int>'
+        '<string name="type">ObjectEventTrigger</string><bool name="enabled">True</bool>'
+        '<int name="trigger-times">3</int><vec2 name="pos">8 2</vec2><dictionary name="parameters">'
+        '<string name="event">Hit</string><dictionary name="object"><int-arr name="static">3</int-arr>'
+        '</dictionary></dictionary></dictionary></array></dictionary></dictionary>')
+    scenario = tmp_path / "scenario"
+    porter = hw1port.Porter(mission, None, scenario, "m", lambda w: None)
+    report = Report()
+    out = convert_level(hw1_level.load(lvl), Resolver(AssetIndex(AE_ASSETS)), AE_ASSETS, report,
+                        lambda i: None, porter=porter)
+
+    a, b, c = sorted(out.units, key=lambda u: u.x)
+    assert a.state == {"layer": ("int", 5)} and b.state == {}
+    # Only the watched piece gets the hittable copy; the trigger watches it.
+    assert a.path == b.path == "hw1/m/doodads/level1/c_h_16.unit"
+    assert c.path == "hw1/m/doodads/level1/c_h_16_hit.unit"
+    assert 'class="Breakable"' in (scenario / c.path).read_text()
+    trig, = [s for s in out.scripts if s.cls == "UnitDamagedTrigger"]
+    assert Param("ids", "Units", [c.id]) in trig.params

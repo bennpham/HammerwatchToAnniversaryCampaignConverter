@@ -1,5 +1,5 @@
 {
-  "_doc": "HW1 sound and music -> AE. 'sounds': a PlaySound node's bank file:name -> the FMOD event AE's own levels use for the same moment. 'music' / 'ambience': a PlayMusic track (sound/music.xml:<name>) -> the MusicMode / AmbienceMode value AE's region table (tweak/regions.sval) gives the matching Castle Hammerwatch area; the acts are prison, armory, archives, chambers. 'music_stingers': tracks AE plays as a one-shot event. Anything missing here stays a plain ScriptLink and is reported.",
+  "_doc": "HW1 sound and music -> AE. 'sounds': a PlaySound node's bank file:name -> the FMOD event AE's own levels use for the same moment. 'music' / 'ambience': a PlayMusic track (sound/music.xml:<name>) -> the MusicMode / AmbienceMode value AE's region table (tweak/regions.sval) gives the Castle Hammerwatch area where HW1 plays that track: act1 prison, act2 armory, act4 archives (levels 7-9), act3 chambers (levels 10-12). 'music_stingers': tracks AE plays as a one-shot event. Anything missing here stays a plain ScriptLink and is reported.",
   "sounds": {
     "sound/misc.xml:info_teleport_activate": "event:/SFX/Effects/other/teleport",
     "sound/misc.xml:button_hatch": "event:/SFX/Objects/Buttons/button_generic",
@@ -11,8 +11,8 @@
     "sound/music.xml:main": 1,
     "sound/music.xml:act1": 2,
     "sound/music.xml:act2": 3,
-    "sound/music.xml:act3": 5,
-    "sound/music.xml:act4": 4,
+    "sound/music.xml:act3": 4,
+    "sound/music.xml:act4": 5,
     "sound/music.xml:boss_1": 6,
     "sound/music.xml:boss_final": 7,
     "sound/music.xml:bonus_1": 8,
@@ -21,8 +21,8 @@
   "ambience": {
     "sound/music.xml:act1": 1,
     "sound/music.xml:act2": 2,
-    "sound/music.xml:act3": 3,
-    "sound/music.xml:act4": 4
+    "sound/music.xml:act3": 4,
+    "sound/music.xml:act4": 3
   },
   "music_stingers": {
     "sound/music.xml:boss_killed": "event:/Music/Stingers/Boss_Defeated"
