@@ -1167,3 +1167,13 @@ def test_circle_shapes_take_hw1_diameter(tmp_path):
     convert_scripts(lv.scripts, ScriptContext(out, {}, lambda i: None, warn=lambda m: None))
     circle, = out.units
     assert circle.path == ":Physics_Circle" and circle.state["radius"] == ("float", 280.0)
+
+
+def test_max_players_option_and_kept_on_reconvert(tmp_path):
+    from hw2ae.ae import scenario
+    scenario.write(tmp_path, "s", "d", "levels/s/a.lvl")
+    assert scenario.existing_max_players(tmp_path) == 7          # a new scenario, as AE's own
+    scenario.write(tmp_path, "s", "d", "levels/s/a.lvl", 3)
+    assert scenario.existing_max_players(tmp_path) == 3
+    scenario.write(tmp_path, "s", "d", "levels/s/a.lvl")         # reconvert without the option
+    assert '<players min="1" max="3" />' in (tmp_path / "info.xml").read_text()

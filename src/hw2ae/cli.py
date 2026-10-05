@@ -35,7 +35,7 @@ def cmd_convert(args) -> int:
     print(f"Output : {out}")
     hw1_assets = config.find_hw1_assets(args.hw1_assets)
     report = convert(Options(source=src, out=out, ae_assets=assets, name=args.name, name_id=name_id,
-                             lighting=args.lighting, hw1_assets=hw1_assets))
+                             lighting=args.lighting, hw1_assets=hw1_assets, max_players=args.max_players))
 
     print()
     print(f"Converted {report.levels} level(s): {report.units} units, {report.scripts} scripts.")
@@ -164,6 +164,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--id", help="scenario id: folder, .h1c and level-path name (default: slug of the name)")
     p.add_argument("--lighting", choices=("hw1", "theme"), default="hw1",
                    help="hw1: keep the mission's brightness (default); theme: AE's darker theme lighting")
+    p.add_argument("--max-players", type=int, metavar="N",
+                   help="players the scenario allows (default: keep the existing info.xml's, else 7 as AE's own scenarios)")
     p.add_argument("--no-pack", action="store_true", help="only write the folder; don't build scenarios/<id>.h1c")
     p.add_argument("--hw1-assets", help="HW1 stock assets as loose files, for porting art AE lacks "
                    "(default: <Hammerwatch>/editor/assetsExtract)")

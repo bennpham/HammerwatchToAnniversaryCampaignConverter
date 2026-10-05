@@ -82,6 +82,7 @@ class Options:
     name_id: str | None = None
     lighting: str = "hw1"  # "hw1": keep HW1's brightness; "theme": AE's theme environments
     hw1_assets: Path | None = None  # stock HW1 assets as loose files, for porting art AE lacks
+    max_players: int | None = None  # None keeps the scenario folder's current limit (default 7)
     log: object = print
 
 
@@ -338,7 +339,7 @@ def convert(opts: Options) -> Report:
 
     start = paths.get(camp.start) or (next(iter(paths.values())) if paths else "")
     desc = camp.description or f"Converted from the Hammerwatch mission '{camp.name}'."
-    scenario.write(opts.out, name, desc, start)
+    scenario.write(opts.out, name, desc, start, opts.max_players)
     _write_logo(camp.root, opts.out, start, opts.ae_assets, report)
 
     log(f"Done in {time.perf_counter() - t0:.1f}s")

@@ -45,11 +45,14 @@ what was found.
 
 | Command | What it does |
 | --- | --- |
-| `convert <mission>` | Convert, validate and pack. `--out`, `--name`, `--id`, `--lighting hw1\|theme`, `--no-pack`. |
+| `convert <mission>` | Convert, validate and pack. `--out`, `--name`, `--id`, `--lighting hw1\|theme`, `--max-players N`, `--no-pack`. |
 | `validate <folder>` | Check a scenario folder: missing units/tilesets/prefabs/environments, broken script links, level exits to nowhere. |
 | `pack <folder>` | Build `scenarios/<folder name>.h1c` from a scenario folder (e.g. after editing it in the editor). |
 | `preview <level.lvl>` | Render a PNG of an AE level with AE's sprites, to eyeball alignment. |
 | `learn <hw1 levels>` | Relearn HW1→AE unit correspondences from a campaign that exists in both games (see below). |
+`--max-players N` sets how many players the scenario allows (`<players max>` in its
+`info.xml`). Without it a reconversion keeps the limit the scenario folder already has, so a
+hand edit survives; a new scenario gets 7, as AE's own scenarios allow.
 
 ## How it maps things
 
