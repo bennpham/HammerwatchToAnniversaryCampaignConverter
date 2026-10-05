@@ -165,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--lighting", choices=("hw1", "theme"), default="hw1",
                    help="hw1: keep the mission's brightness (default); theme: AE's darker theme lighting")
     p.add_argument("--max-players", type=int, metavar="N",
-                   help="players the scenario allows (default: keep the existing info.xml's, else 7 as AE's own scenarios)")
+                   help="players the scenario allows (default: 7, as AE's own scenarios)")
     p.add_argument("--no-pack", action="store_true", help="only write the folder; don't build scenarios/<id>.h1c")
     p.add_argument("--hw1-assets", help="HW1 stock assets as loose files, for porting art AE lacks "
                    "(default: <Hammerwatch>/editor/assetsExtract)")

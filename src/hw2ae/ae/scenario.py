@@ -65,24 +65,15 @@ def info_xml(name: str, description: str, start_lvl: str, players_max: int = 7) 
     return "\n".join(lines)
 
 
-# AE's own scenarios (Castle Hammerwatch, Temple of the Sun) allow 7.
+# AE's own scenarios (Castle Hammerwatch, Temple of the Sun) allow 7. HW1
+# missions have no player-limit setting, so there is nothing to carry over;
+# --max-players sets another.
 DEFAULT_MAX_PLAYERS = 7
 
 
-def existing_max_players(out: Path) -> int | None:
-    """The player limit an earlier ``info.xml`` in the scenario folder set,
-    e.g. by hand, so a reconversion keeps it."""
-    try:
-        m = re.search(r'<players\b[^>]*\bmax="(\d+)"', (out / "info.xml").read_text(encoding="utf-8"))
-    except OSError:
-        return None
-    return int(m.group(1)) if m else None
-
-
 def write(out: Path, name: str, description: str, start_lvl: str, max_players: int | None = None) -> None:
-    """``max_players`` None keeps the folder's current limit, else the default."""
     out.mkdir(parents=True, exist_ok=True)
-    players = max_players or existing_max_players(out) or DEFAULT_MAX_PLAYERS
+    players = max_players or DEFAULT_MAX_PLAYERS
     (out / "info.xml").write_text(info_xml(name, description, start_lvl, players), encoding="utf-8", newline="\n")
     stale = out / "info.sval"  # written by earlier versions; PACKAGER would pack it as a plain file
     if stale.exists():

@@ -1169,11 +1169,11 @@ def test_circle_shapes_take_hw1_diameter(tmp_path):
     assert circle.path == ":Physics_Circle" and circle.state["radius"] == ("float", 280.0)
 
 
-def test_max_players_option_and_kept_on_reconvert(tmp_path):
+def test_max_players_defaults_to_aes_7(tmp_path):
+    # HW1 has no player-limit setting: always AE's 7, unless --max-players says otherwise.
     from hw2ae.ae import scenario
+    (tmp_path / "info.xml").write_text('<info><players min="1" max="4" /></info>')
     scenario.write(tmp_path, "s", "d", "levels/s/a.lvl")
-    assert scenario.existing_max_players(tmp_path) == 7          # a new scenario, as AE's own
-    scenario.write(tmp_path, "s", "d", "levels/s/a.lvl", 3)
-    assert scenario.existing_max_players(tmp_path) == 3
-    scenario.write(tmp_path, "s", "d", "levels/s/a.lvl")         # reconvert without the option
-    assert '<players min="1" max="3" />' in (tmp_path / "info.xml").read_text()
+    assert '<players min="1" max="7" />' in (tmp_path / "info.xml").read_text()
+    scenario.write(tmp_path, "s", "d", "levels/s/a.lvl", 4)
+    assert '<players min="1" max="4" />' in (tmp_path / "info.xml").read_text()

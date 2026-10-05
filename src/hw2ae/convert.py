@@ -82,7 +82,7 @@ class Options:
     name_id: str | None = None
     lighting: str = "hw1"  # "hw1": keep HW1's brightness; "theme": AE's theme environments
     hw1_assets: Path | None = None  # stock HW1 assets as loose files, for porting art AE lacks
-    max_players: int | None = None  # None keeps the scenario folder's current limit (default 7)
+    max_players: int | None = None  # None: AE's 7
     log: object = print
 
 
