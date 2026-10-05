@@ -95,7 +95,10 @@ correspondences and pixel offsets.
 - **Scripts.** `LevelStart`, `AreaTrigger`, `AnnounceText`, `ToggleElement` → `ToggleScripts`,
   `ObjectEventTrigger(Destroyed)` → `UnitDestroyedTrigger`, `LevelExitArea` → `AreaTrigger` +
   `LevelExit`, `GameEnd` → `AnnounceText` + `ShowGameOver` (credits). Shapes become
-  `:Physics_Rectangle` / `:Physics_Circle` areas. `RespawnPlayers` has no AE world script and
+  `:Physics_Rectangle` / `:Physics_Circle` areas (HW1 circles give a diameter in tiles). HW1
+  counts an actor dying inside an area as leaving it; AE doesn't, so an exit trigger for actors
+  also watches its own `AllInside` for deaths. HW1's `Counter` counts down and `IncrementCounter`
+  adds to it, which in AE is a `ModifyCounter` decrement. `RespawnPlayers` has no AE world script and
   is dropped; an unknown node is kept as a `ScriptLink` so its links still fire, and reported.
   `AllPlayersAreaTrigger` (teleporter pads) fires its targets through AE's `OnAllEntered`;
   a `LevelExitArea` with no shape becomes a lone `LevelExit` the pad executes; `PlaySound`

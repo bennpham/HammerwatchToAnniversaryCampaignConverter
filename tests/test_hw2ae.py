@@ -1070,3 +1070,88 @@ def test_every_stock_item_and_actor_is_mapped_dropped_or_a_known_gap():
     missing = sorted(rel for kind in ("items", "actors") for f in (hw1 / kind).rglob("*.xml")
                      if (rel := f.relative_to(hw1).as_posix()) not in KNOWN_GAPS and r.resolve(rel) is None)
     assert not missing, missing
+
+
+def test_increment_counter_takes_a_run_back(tmp_path):
+    # Survival Colosseum: +1 per enemy entering the arena, a Counter run per one dying, fires at 0.
+    # HW1's Counter counts down and IncrementCounter adds to it, so in AE it takes a run back.
+    node = ('<dictionary><int name="id">{i}</int><string name="type">{t}</string><bool name="enabled">True</bool>'
+            '<int name="trigger-times">-1</int><vec2 name="pos">0 0</vec2>{p}</dictionary>')
+    xml = tmp_path / "l.xml"
+    xml.write_text('<dictionary><dictionary name="scripting"><array name="nodes">'
+                   + node.format(i=683, t="Counter", p='<dictionary name="parameters"><int name="count">0</int>'
+                                 '<dictionary name="execute"><int-arr name="static">685</int-arr></dictionary>'
+                                 '</dictionary>')
+                   + node.format(i=684, t="IncrementCounter", p='<dictionary name="parameters"><dictionary '
+                                 'name="counter"><int-arr name="static">683</int-arr></dictionary></dictionary>')
+                   + node.format(i=685, t="ScriptLink", p="")
+                   + "</array></dictionary></dictionary>")
+    lv = hw1_level.load(xml)
+    out = Level("DungeonGameMode", None)
+    ctx = ScriptContext(out, {}, lambda i: None, warn=lambda m: None)
+    convert_scripts(lv.scripts, ctx)
+    counter, = (s for s in out.scripts if s.cls == "Counter")
+    inc, = (s for s in out.scripts if s.cls == "ModifyCounter")
+    assert Param("int", "Count", 0) in counter.params
+    assert Param("int", "Mode", 3) in inc.params and Param("int", "Value", 1) in inc.params
+    assert Param("ids", "Counters", [counter.id]) in inc.params and not inc.connections
+
+
+def _nodes_level(tmp_path, nodes: str):
+    xml = tmp_path / "l.xml"
+    xml.write_text('<dictionary><dictionary name="scripting"><array name="nodes">' + nodes
+                   + "</array></dictionary></dictionary>")
+    return hw1_level.load(xml)
+
+
+_NODE = ('<dictionary><int name="id">{i}</int><string name="type">{t}</string><bool name="enabled">True</bool>'
+         '<int name="trigger-times">-1</int><vec2 name="pos">{x} {y}</vec2>{p}{c}</dictionary>')
+
+
+def test_enemy_dying_inside_counts_as_leaving(tmp_path):
+    # Survival Colosseum: "enemy left the arena" runs the counter; in HW1 a death inside is a leave.
+    lv = _nodes_level(tmp_path, "".join([
+        _NODE.format(i=677, t="CircleShape", x=0, y=0, c="",
+                     p='<dictionary name="parameters"><float name="radius">5</float></dictionary>'),
+        _NODE.format(i=680, t="AreaTrigger", x=0, y=0, c='<int-arr name="connections">683</int-arr>'
+                     '<int-arr name="connection-delays">0</int-arr>',
+                     p='<dictionary name="parameters"><int name="event">1</int><int name="types">2</int>'
+                     '<dictionary name="shape"><int-arr name="static">677</int-arr></dictionary></dictionary>'),
+        _NODE.format(i=683, t="ScriptLink", x=0, y=0, c="", p=""),
+    ]))
+    out = Level("DungeonGameMode", None)
+    ctx = ScriptContext(out, {}, lambda i: None, warn=lambda m: None)
+    convert_scripts(lv.scripts, ctx)
+    area, = (s for s in out.scripts if s.cls == "AreaTrigger")
+    died, = (s for s in out.scripts if s.cls == "UnitDestroyedTrigger")
+    assert Param("int", "Event", 2) in area.params and Param("int", "Filter", 4) in area.params
+    assert Param("sources", "#Units", [(area.id, "AllInside")]) in died.params
+    (link, _), = area.connections
+    assert died.connections == [(link, 0)]
+    target = ctx.id_map[683]
+    assert next(s for s in out.scripts if s.id == link).connections == [(target, 0)]
+
+
+def test_spawned_object_lands_where_a_placed_one_would(tmp_path):
+    # The arena's closing wall is spawned: a_v_16 is AE's v_32, placed 16 px up.
+    lv = _nodes_level(tmp_path, _NODE.format(i=1, t="SpawnObject", x=11, y=2, c="",
+                                             p='<string name="parameters">doodads/theme_a/a_v_16.xml</string>'))
+    r = Resolver(AllExist())  # type: ignore[arg-type]
+    out = Level("DungeonGameMode", None)
+    ctx = ScriptContext(out, {}, lambda i: None, warn=lambda m: None,
+                        resolve_unit=lambda t: r.resolve(t).path,
+                        resolve_offset=lambda t: (r.resolve(t).dx, r.resolve(t).dy))
+    convert_scripts(lv.scripts, ctx)
+    spawn, = out.scripts
+    assert (spawn.cls, spawn.x, spawn.y) == ("SpawnUnit", 176, 16)
+
+
+def test_circle_shapes_take_hw1_diameter(tmp_path):
+    # HW1's CircleShape stores a diameter in tiles; the colosseum's arena is 35 across.
+    lv = _nodes_level(tmp_path, _NODE.format(i=677, t="CircleShape", x=-3.25, y=1, c="",
+                                             p='<dictionary name="parameters"><float name="diameter">35</float>'
+                                               '<int name="types">2</int></dictionary>'))
+    out = Level("DungeonGameMode", None)
+    convert_scripts(lv.scripts, ScriptContext(out, {}, lambda i: None, warn=lambda m: None))
+    circle, = out.units
+    assert circle.path == ":Physics_Circle" and circle.state["radius"] == ("float", 280.0)

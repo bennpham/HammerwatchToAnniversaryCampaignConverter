@@ -217,8 +217,13 @@ def convert_level(lv: hw1_level.Level, resolver: Resolver, ae_assets: Path, repo
             return r.path
         return None
 
+    def resolve_offset(hw1_type: str) -> tuple[float, float]:
+        r = resolver.resolve(hw1_type)
+        return (r.dx, r.dy) if isinstance(r, Placement) and r.kind == "unit" else (0.0, 0.0)
+
     ctx = ScriptContext(level=out, id_map=id_map, level_path_for=level_path_for, warn=report.warn,
-                        bosses=bosses, resolve_unit=resolve_unit, dialog_prefix=name_id,
+                        bosses=bosses, resolve_unit=resolve_unit, resolve_offset=resolve_offset,
+                        dialog_prefix=name_id,
                         boss_title=custom.boss_title if custom is not None else (lambda hw1_type: None))
     if dialogs is not None:
         ctx.dialogs = dialogs  # shared by every level of the scenario

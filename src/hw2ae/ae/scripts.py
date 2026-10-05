@@ -82,6 +82,8 @@ COLLIDE_STATES = {0: 2, 1: 1, 2: 3}    # enable, disable, toggle -> Enable=2, Di
 FLAG_OFF, FLAG_RUN = 0, 2
 # AE CompareFunc.
 CMP_EQUAL, CMP_GREATER_OR_EQUAL = 1, 4
+# AE CounterMode (ModifyCounter.as): Decrement takes runs off an AE Counter.
+COUNTER_DECREMENT = 3
 # HW1 speech bubbles -> AE dialogs (StartDialog), added to a copy of this table.
 DIALOG_FILE = "tweak/dialogs/dialog_castlehw.sval"
 DIALOG_STYLE = "white_tail"  # AE's speech bubble with a tail, its NPCs' style
@@ -107,6 +109,8 @@ DAMAGE_FILTER_ALL = 71
 
 # HW1 AreaTrigger ``types`` bits -> AE AreaFilter bits.
 _AREA_FILTER = {1: 2, 2: 4, 4: 8 | 16 | 32, 8: 64}
+HW1_ACTOR_TYPES = 1 | 2   # players, enemies
+AREA_ON_EXIT = 2          # AE AreaEvent.OnExit
 
 
 def _refs(params: sval.Node | None, name: str) -> tuple[list[int], list[int]]:
@@ -179,6 +183,10 @@ class ScriptContext:
     bosses: list[tuple[int, str]] = field(default_factory=list)
     # HW1 object type -> AE unit path, as placed objects resolve (SpawnObject).
     resolve_unit: Callable[[str], str | None] = lambda hw1_type: None
+    # Its pixel offset as a placed object (AE origin - HW1 origin), so a
+    # spawned piece lands where a placed one would (Survival Colosseum spawns
+    # the wall that closes its arena).
+    resolve_offset: Callable[[str], tuple[float, float]] = lambda hw1_type: (0.0, 0.0)
     # The level's HW1 script nodes by id, for nodes that read another's params.
     nodes: dict[int, ScriptNode] = field(default_factory=dict)
     # (dialog id, text) for every speech bubble; shared by all levels and
@@ -213,7 +221,10 @@ def convert_scripts(nodes: list[ScriptNode], ctx: ScriptContext) -> None:
             ctx.id_map[n.id] = uid
         elif n.type == "CircleShape":
             uid = lv.new_id()
-            r = float(_val(n.params, "radius", _val(n.params, "r", 1.0))) * TILE
+            # HW1 writes a diameter in tiles (every one of its 290 circles);
+            # AE a radius in px: 23 of Castle's 25 paired circles are D * 8.
+            d = _val(n.params, "diameter")
+            r = (float(d) / 2 if d is not None else float(_val(n.params, "radius", _val(n.params, "r", 1.0)))) * TILE
             lv.units.append(Unit(":Physics_Circle", px, py, uid, _physics_state({"radius": ("float", r)})))
             ctx.id_map[n.id] = uid
         elif n.type == "RespawnPlayers":
@@ -367,11 +378,26 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
         for bit, ae_bits in _AREA_FILTER.items():
             if types & bit:
                 flt |= ae_bits
-        return [Script("AreaTrigger", sid, x, y, params=[
-            Param("int", "Event", int(_val(p, "event", 0)) + 1),
+        event = int(_val(p, "event", 0)) + 1
+        area = Script("AreaTrigger", sid, x, y, params=[
+            Param("int", "Event", event),
             Param("ids", "Areas", _feed(ctx, _ids(p, "shape"))),
             Param("int", "Filter", flt or 2),
-        ])]
+        ])
+        if event != AREA_ON_EXIT or not types & HW1_ACTOR_TYPES:
+            return [area]
+        # HW1 counts an actor dying inside as leaving (Survival Colosseum
+        # counts its arena's enemies down that way). AE's OnExit skips a unit
+        # that is no longer valid, so a death inside is caught by watching the
+        # trigger's own AllInside: one leaving is removed from it (and counted
+        # by OnExit), one dying inside is still there.
+        died = Script("UnitDestroyedTrigger", ctx.level.new_id(), x + 16, y, label="died inside", params=[
+            Param("sources", "#Units", [(sid, "AllInside")]),
+        ])
+        out = Script("ScriptLink", ctx.level.new_id(), x + 32, y)
+        area.connections.append((out.id, 0))
+        died.connections.append((out.id, 0))
+        return [area, died, out]
 
     if t == "AnnounceText":
         params = [Param("string", "Text", str(_val(p, "text", "")))]
@@ -408,7 +434,9 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
         if unit is None:
             ctx.warn(f"SpawnObject of '{hw1_type}', which has no AE unit yet; kept as a plain ScriptLink")
             return [Script("ScriptLink", sid, x, y)]
-        spawn = Script("SpawnUnit", sid, x, y, label=unit.rsplit("/", 1)[-1],
+        # AE spawns at the script; HW1 at the node, with HW1's sprite origin.
+        dx, dy = ctx.resolve_offset(hw1_type)
+        spawn = Script("SpawnUnit", sid, x + dx, y + dy, label=unit.rsplit("/", 1)[-1],
                        params=[Param("string", "UnitType", unit)])
         title = next((tt for s, tt in ctx.boss_spawners if s == sid), None)
         if title is not None:
@@ -609,17 +637,23 @@ def _convert_simple(n: ScriptNode, ctx: ScriptContext, sid: int, x: float, y: fl
         ])]
 
     if t == "Counter":
-        # Both count their runs and fire their targets from the count on.
+        # HW1 counts down from its count and fires each run that leaves it at
+        # 0 or below (TiltedEngine's Counter.OnExecute); AE counts its runs
+        # up and fires from Count on. The same while nothing adds to it.
         return [Script("Counter", sid, x, y, label=str(_val(p, "count", 1)), params=[
             Param("int", "Count", int(_val(p, "count", 1))),
             Param("ids", "ToExecute", _feed(ctx, _ids(p, "execute"))),
         ])]
 
     if t == "IncrementCounter":
-        # Running an AE Counter is what increments it.
-        link = Script("ScriptLink", sid, x, y)
-        link.connections.extend((c, 0) for c in _feed(ctx, _ids(p, "counter")))
-        return [link]
+        # HW1 adds 1 to the counter: one more run before it fires. In AE that
+        # is one run taken back (Survival Colosseum counts enemies in: +1 per
+        # enemy entering the arena, a run per one dying, "You Survived" at 0).
+        return [Script("ModifyCounter", sid, x, y, label="+1", params=[
+            Param("int", "Mode", COUNTER_DECREMENT),
+            Param("int", "Value", 1),
+            Param("ids", "Counters", _feed(ctx, _ids(p, "counter"))),
+        ])]
 
     if t == "HideObject":
         state = int(_val(p, "state", 1))
