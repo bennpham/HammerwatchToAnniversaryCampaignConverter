@@ -51,8 +51,7 @@ what was found.
 | `preview <level.lvl>` | Render a PNG of an AE level with AE's sprites, to eyeball alignment. |
 | `learn <hw1 levels>` | Relearn HW1→AE unit correspondences from a campaign that exists in both games (see below). |
 `--max-players N` sets how many players the scenario allows (`<players max>` in its
-`info.xml`). Without it a reconversion keeps the limit the scenario folder already has, so a
-hand edit survives; a new scenario gets 7, as AE's own scenarios allow.
+`info.xml`); without it a scenario allows 7, as AE's own do. HW1 missions have no such setting.
 
 ## How it maps things
 
