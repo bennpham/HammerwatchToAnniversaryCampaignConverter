@@ -777,8 +777,12 @@ def test_piratecove_script_nodes():
     # A hit on a placed object counts; Counter keeps HW1's count and target.
     hit, = by_cls["UnitDamagedTrigger"]
     assert Param("ids", "Units", [900]) in hit.params
-    c2 = next(s for s in by_cls["Counter"] if s.id == sid[110189])
-    assert Param("int", "Count", 2) in c2.params and Param("ids", "ToExecute", [911]) in c2.params
+    # A Counter counts its runs in a saved Variable (AE's Counter forgets on a level revisit).
+    assert "Counter" not in by_cls
+    add = next(s for s in by_cls["ChangeVariables"] if s.id == sid[110189])
+    (check_id, _), = add.connections
+    check = next(s for s in by_cls["CheckVariables"] if s.id == check_id)
+    assert Param("int", "Value", 2) in check.params and Param("ids", "OnTrue", [911]) in check.params
 
     # "dynamic" = what a SpawnObject made: AE's #Units from that SpawnUnit.
     gone, = by_cls["UnitDestroyedTrigger"]
@@ -816,7 +820,8 @@ def test_piratecove_script_nodes():
 
     fx, = by_cls["SpawnEffect"]
     assert Param("string", "Effect", "effects/blink.effect") in fx.params
-    check, = by_cls["CheckVariables"]
+    # The level's own CheckVariable (the others count Counter runs).
+    check, = (s for s in by_cls["CheckVariables"] if not str(s.label or "").startswith(">="))
     assert Param("int", "Function", 2) in check.params        # HW1 1 = Greater
     assert any("MoveAI" in w for w in warnings)
 
@@ -1090,11 +1095,18 @@ def test_increment_counter_takes_a_run_back(tmp_path):
     out = Level("DungeonGameMode", None)
     ctx = ScriptContext(out, {}, lambda i: None, warn=lambda m: None)
     convert_scripts(lv.scripts, ctx)
-    counter, = (s for s in out.scripts if s.cls == "Counter")
-    inc, = (s for s in out.scripts if s.cls == "ModifyCounter")
-    assert Param("int", "Count", 0) in counter.params
-    assert Param("int", "Mode", 3) in inc.params and Param("int", "Value", 1) in inc.params
-    assert Param("ids", "Counters", [counter.id]) in inc.params and not inc.connections
+    # Never AE's Counter: it forgets its count when the player leaves and comes back.
+    assert not any(s.cls in ("Counter", "ModifyCounter") for s in out.scripts)
+    var, = (s for s in out.scripts if s.cls == "Variable")
+    run = next(s for s in out.scripts if s.id == ctx.id_map[683])
+    inc = next(s for s in out.scripts if s.id == ctx.id_map[684])
+    check, = (s for s in out.scripts if s.cls == "CheckVariables")
+    # A run adds 1 then checks >= count; IncrementCounter subtracts 1 from the same Variable.
+    assert Param("int", "Function", 2) in run.params and Param("ids", "Variables", [var.id]) in run.params
+    assert run.connections == [(check.id, 0)]
+    assert Param("int", "Function", 4) in check.params and Param("int", "Value", 0) in check.params
+    assert Param("ids", "OnTrue", [ctx.id_map[685]]) in check.params
+    assert Param("int", "Function", 3) in inc.params and Param("ids", "Variables", [var.id]) in inc.params
 
 
 def _nodes_level(tmp_path, nodes: str):

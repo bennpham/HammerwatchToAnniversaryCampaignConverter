@@ -82,8 +82,6 @@ COLLIDE_STATES = {0: 2, 1: 1, 2: 3}    # enable, disable, toggle -> Enable=2, Di
 FLAG_OFF, FLAG_RUN = 0, 2
 # AE CompareFunc.
 CMP_EQUAL, CMP_GREATER_OR_EQUAL = 1, 4
-# AE CounterMode (ModifyCounter.as): Decrement takes runs off an AE Counter.
-COUNTER_DECREMENT = 3
 # HW1 speech bubbles -> AE dialogs (StartDialog), added to a copy of this table.
 DIALOG_FILE = "tweak/dialogs/dialog_castlehw.sval"
 DIALOG_STYLE = "white_tail"  # AE's speech bubble with a tail, its NPCs' style
@@ -163,6 +161,16 @@ def _val(params: sval.Node | None, name: str, default=None):
     return default if n is None or n.children else n.value
 
 
+def _counter_var(ctx: "ScriptContext", hw1_counter: int, x: float, y: float) -> int:
+    """The AE Variable a HW1 Counter counts its runs in, made on first use
+    (an IncrementCounter can come before its Counter)."""
+    if hw1_counter not in ctx.counter_vars:
+        vid = ctx.level.new_id()
+        ctx.counter_vars[hw1_counter] = vid
+        ctx.level.scripts.append(Script("Variable", vid, x - 16, y, label="0", params=[Param("int", "Value", 0)]))
+    return ctx.counter_vars[hw1_counter]
+
+
 def _start_id(v) -> str | None:
     """HW1 start id -> AE ``StartID``; ``None`` for HW1's default start (0).
 
@@ -192,6 +200,8 @@ class ScriptContext:
     # (dialog id, text) for every speech bubble; shared by all levels and
     # written as the scenario's copy of DIALOG_FILE.
     dialogs: list[tuple[str, str]] = field(default_factory=list)
+    # HW1 Counter node id -> the AE Variable that counts its runs.
+    counter_vars: dict[int, int] = field(default_factory=dict)
     # Prefix for dialog ids, unique per scenario.
     dialog_prefix: str = "hw1"
 
@@ -638,21 +648,39 @@ def _convert_simple(n: ScriptNode, ctx: ScriptContext, sid: int, x: float, y: fl
 
     if t == "Counter":
         # HW1 counts down from its count and fires each run that leaves it at
-        # 0 or below (TiltedEngine's Counter.OnExecute); AE counts its runs
-        # up and fires from Count on. The same while nothing adds to it.
-        return [Script("Counter", sid, x, y, label=str(_val(p, "count", 1)), params=[
-            Param("int", "Count", int(_val(p, "count", 1))),
-            Param("ids", "ToExecute", _feed(ctx, _ids(p, "execute"))),
-        ])]
+        # 0 or below (TiltedEngine's Counter.OnExecute). AE's Counter would do
+        # the same but keeps no saved state: AE restores a level's pressed
+        # buttons and destroyed walls when the player comes back, and a
+        # Counter starts again at 0 that its spent triggers can never finish
+        # (Pirate Cove's two blue-spike buttons, its three runes). A Variable
+        # is saved, so the runs are counted in one: +1 per run, fire at Count.
+        count = int(_val(p, "count", 1))
+        var = _counter_var(ctx, n.id, x, y)
+        check = Script("CheckVariables", ctx.level.new_id(), x + 16, y, label=f">= {count}", params=[
+            Param("int", "Function", CMP_GREATER_OR_EQUAL),
+            Param("int", "Value", count),
+            Param("ids", "Variable", [var]),
+            Param("ids", "OnTrue", _feed(ctx, _ids(p, "execute"))),
+            Param("ids", "OnFalse", []),
+        ])
+        add = Script("ChangeVariables", sid, x, y, label=f"count {count}", params=[
+            Param("int", "Function", CHANGE_FUNCS[1]),
+            Param("int", "Value", 1),
+            Param("ids", "Variables", [var]),
+        ])
+        add.connections.append((check.id, 0))
+        return [add, check]
 
     if t == "IncrementCounter":
-        # HW1 adds 1 to the counter: one more run before it fires. In AE that
-        # is one run taken back (Survival Colosseum counts enemies in: +1 per
-        # enemy entering the arena, a run per one dying, "You Survived" at 0).
-        return [Script("ModifyCounter", sid, x, y, label="+1", params=[
-            Param("int", "Mode", COUNTER_DECREMENT),
+        # HW1 adds 1 to the counter: one more run before it fires, i.e. one
+        # run taken back (Survival Colosseum counts enemies in: +1 per enemy
+        # entering the arena, a run per one dying, "You Survived" at 0).
+        counters = [c for c in _ids(p, "counter") if c in ctx.nodes]
+        return [Script("ChangeVariables", sid, x, y, label="+1", params=[
+            Param("int", "Function", CHANGE_FUNCS[2]),
             Param("int", "Value", 1),
-            Param("ids", "Counters", _feed(ctx, _ids(p, "counter"))),
+            Param("ids", "Variables", [_counter_var(ctx, c, ctx.nodes[c].x * TILE, ctx.nodes[c].y * TILE)
+                                       for c in counters]),
         ])]
 
     if t == "HideObject":
