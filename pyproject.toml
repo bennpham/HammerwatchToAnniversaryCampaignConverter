@@ -8,13 +8,19 @@ version = "0.1.0"
 description = "Convert Hammerwatch 1 missions and campaigns into playable Hammerwatch Anniversary Edition scenarios"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+# HW2A000FF ports HW1 art AE has no counterpart for (custom doodads, water, the
+# castle/desert themes, floor buttons). Pinned so every machine converts alike.
+# Pillow pads ported textures to the power-of-two sizes AE requires.
+dependencies = [
+    "pillow",
+    "hw2a000ff @ git+https://github.com/bennpham/HW2A000FF-AllPlatform-Remake@089a782eb773e70edbf3957cfc565d65b93a32be",
+]
 
 [project.optional-dependencies]
-preview = ["pillow"]
+preview = []  # Pillow is now a dependency
 test = ["pytest"]
-# Ports HW1 art AE has no counterpart for (custom doodads, water, castle/desert themes).
-port = ["hw2a000ff @ git+https://github.com/bennpham/HW2A000FF-AllPlatform-Remake"]
+# Kept so older install commands still work; HW2A000FF is now a dependency.
+port = []
 
 [project.scripts]
 hw2ae = "hw2ae.cli:main"

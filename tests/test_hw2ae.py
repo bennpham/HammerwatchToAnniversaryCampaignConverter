@@ -130,6 +130,81 @@ def test_reads_editor_dialect():
     assert lv.ambient == (90, 90, 90, 255)
 
 
+def _assets_bin(path: Path, files: dict[str, bytes]) -> Path:
+    """A HW1 assets.bin: HWRAD, 3 header bytes, then varint name length,
+    name, uint32 size and bytes per file."""
+    out = bytearray(b"HWRAD\x09\x00\x00")
+    for name, data in files.items():
+        raw = name.encode()
+        n = len(raw)
+        while n >= 0x80:
+            out.append(n & 0x7F | 0x80)
+            n >>= 7
+        out.append(n)
+        out += raw + len(data).to_bytes(4, "little") + data
+    path.write_bytes(bytes(out))
+    return path
+
+
+def test_assets_bin_index_and_cached_unpack(tmp_path):
+    from hw2ae.hw1 import assets_bin
+    long_name = "doodads/" + "x" * 150 + ".xml"  # a name length needing two varint bytes
+    files = {"arial.png": b"\x89PNG", long_name: b"long", "doodads/generic/marker_exit.xml": b"<doodad />"}
+    data = _assets_bin(tmp_path / "long.bin", files).read_bytes()
+    index = assets_bin.read_index(tmp_path / "long.bin")
+    assert {n: data[o:o + s] for n, (o, s) in index.items()} == files
+
+    del files[long_name]  # too long a path for Windows under pytest's temp folder
+    bin_path = _assets_bin(tmp_path / "assets.bin", files)
+
+    cache = tmp_path / "cache"
+    folder = assets_bin.unpack_cached(bin_path, cache)
+    assert (folder / "doodads/generic/marker_exit.xml").read_bytes() == b"<doodad />"
+    (folder / "arial.png").write_bytes(b"changed")
+    assert assets_bin.unpack_cached(bin_path, cache) == folder
+    assert (folder / "arial.png").read_bytes() == b"changed"  # reused, not unpacked again
+    (folder / ".complete").unlink()  # as if an earlier unpack was cut short
+    assert (assets_bin.unpack_cached(bin_path, cache) / "arial.png").read_bytes() == b"\x89PNG"
+
+    (tmp_path / "bad.bin").write_bytes(b"not an archive")
+    with pytest.raises(ValueError):
+        assets_bin.read_index(tmp_path / "bad.bin")
+    (tmp_path / "short.bin").write_bytes(data[:-2])  # cut off mid-file
+    with pytest.raises(ValueError):
+        assets_bin.read_index(tmp_path / "short.bin")
+
+
+def test_hw1_assets_fall_back_to_assets_bin(tmp_path, monkeypatch):
+    # No ResourceExtractor output: the install's assets.bin is unpacked instead.
+    from hw2ae import config
+    from hw2ae.hw1 import assets_bin
+    hw1 = tmp_path / "Hammerwatch"
+    hw1.mkdir()
+    _assets_bin(hw1 / "assets.bin", {"doodads/a.xml": b"<doodad />"})
+    monkeypatch.setenv("HW2AE_HW1_ROOT", str(hw1))
+    monkeypatch.delenv("HW2AE_HW1_ASSETS", raising=False)
+    monkeypatch.setattr(assets_bin, "cache_root", lambda: tmp_path / "cache")
+    found = config.find_hw1_assets()
+    assert found.parent == tmp_path / "cache" and (found / "doodads/a.xml").is_file()
+    assert config.find_hw1_assets(str(hw1 / "assets.bin")) == found  # a path to the archive works too
+    (hw1 / "editor" / "assetsExtract").mkdir(parents=True)
+    assert config.find_hw1_assets() == hw1 / "editor" / "assetsExtract"  # extracted files win
+
+
+def test_assets_bin_matches_hw1_extract():
+    from hw2ae.config import HW1_ARCHIVE, HW1_EXTRACTED, find_hw1_root
+    from hw2ae.hw1 import assets_bin
+    root = find_hw1_root()
+    if root is None or not (root / HW1_EXTRACTED).is_dir():
+        pytest.skip("HW1 not installed, or its assets not extracted")
+    data = (root / HW1_ARCHIVE).read_bytes()
+    index = assets_bin.read_index(root / HW1_ARCHIVE)
+    for name in ["doodads/generic/marker_exit.xml", "doodads/special/trigger_button_floor.xml",
+                 "doodads/theme_g/g_special_pillar.xml", "doodads/generic/markers.png"]:
+        o, s = index[name]
+        assert data[o:o + s] == (root / HW1_EXTRACTED / name).read_bytes()
+
+
 def test_campaign():
     c = campaign.load(FIX)
     assert c.name == "Test Dungeon" and c.start == "0"
@@ -148,7 +223,8 @@ def test_wall_mapping_and_offsets():
     assert (p.path, p.dy) == ("doodads/walls/chambers/__color_64.unit", 64)
     p = r.resolve("items/door_a_silver_h_v2.xml")
     assert p.path == "doodads/doors/door_h_mid_silver_prison.unit"
-    assert isinstance(r.resolve("doodads/generic/marker_exit.xml"), Dropped)
+    assert r.resolve("doodads/generic/marker_exit.xml").path == "doodads/generic/marker_exit.unit"
+    assert isinstance(r.resolve("doodads/generic/marker_spawn.xml"), Dropped)
     assert r.resolve("items/some_unknown_item.xml") is None
     torch = r.resolve("doodads/generic/lamp_torch_off.xml")
     assert torch.params == {"start": "n-off"}

@@ -10,10 +10,14 @@ import re
 import string
 from pathlib import Path
 
+from .hw1.assets_bin import unpack_cached
+
 AE_DIR = "Hammerwatch Anniversary Edition"
 HW1_DIR = "Hammerwatch"
 # Where HW1's ResourceExtractor.exe unpacks the stock assets (assets.bin).
 HW1_EXTRACTED = r"editor\assetsExtract"
+# HW1's stock assets, packed; always there when HW1 is installed.
+HW1_ARCHIVE = "assets.bin"
 STEAM_SUBDIRS = [
     r"Program Files (x86)\Steam\steamapps\common",
     r"Program Files\Steam\steamapps\common",
@@ -43,18 +47,37 @@ def find_ae_root(explicit: str | None = None) -> Path | None:
     return None
 
 
-def find_hw1_assets(explicit: str | None = None) -> Path | None:
-    """HW1's stock assets as loose files, for porting art AE never remade.
-
-    HW1 ships them packed in ``assets.bin``; its ``ResourceExtractor.exe``
-    writes them to ``editor/assetsExtract``."""
-    for p in [explicit, os.environ.get("HW2AE_HW1_ASSETS")]:
+def find_hw1_root(explicit: str | None = None) -> Path | None:
+    """The Hammerwatch (HW1) install: the folder holding ``assets.bin``."""
+    for p in [explicit, os.environ.get("HW2AE_HW1_ROOT")]:
         if p and Path(p).is_dir():
             return Path(p)
     for c in _candidates(HW1_DIR):
-        d = c / HW1_EXTRACTED
-        if d.is_dir():
-            return d
+        if (c / HW1_ARCHIVE).is_file():
+            return c
+    return None
+
+
+def find_hw1_assets(explicit: str | None = None) -> Path | None:
+    """HW1's stock assets as loose files, for porting art AE never remade.
+
+    Order: ``explicit``, ``HW2AE_HW1_ASSETS`` (a folder, or an ``assets.bin``),
+    the folder HW1's ``ResourceExtractor.exe`` writes (``editor/assetsExtract``),
+    then the install's ``assets.bin`` unpacked once into a per-user cache."""
+    for p in [explicit, os.environ.get("HW2AE_HW1_ASSETS")]:
+        if not p:
+            continue
+        if Path(p).is_dir():
+            return Path(p)
+        if Path(p).is_file():
+            return unpack_cached(Path(p))
+    root = find_hw1_root()
+    if root is None:
+        return None
+    if (root / HW1_EXTRACTED).is_dir():
+        return root / HW1_EXTRACTED
+    if (root / HW1_ARCHIVE).is_file():
+        return unpack_cached(root / HW1_ARCHIVE)
     return None
 
 

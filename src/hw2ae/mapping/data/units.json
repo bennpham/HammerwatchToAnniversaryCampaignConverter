@@ -141,7 +141,7 @@
 
   "doodads/generic/lamp_torch.xml": {"ae": "doodads/generic/lamps/torch.unit"},
   "doodads/generic/lamp_torch_off.xml": {"ae": "doodads/generic/lamps/torch.unit", "params": {"start": "n-off"}},
-  "doodads/generic/marker_exit.xml": {"drop": "AE exit pieces carry their own floor marking"},
+  "doodads/generic/marker_exit.xml": {"ae": "doodads/generic/marker_exit.unit"},
   "doodads/generic/marker_spawn.xml": {"drop": "editor-only spawn marker"},
   "doodads/generic/vgt_ivy_1.xml": {"ae": "doodads/terrain/vgt_ivy.unit"},
   "doodads/generic/vgt_ivy_2.xml": {"ae": "doodads/terrain/vgt_ivy.unit"},
