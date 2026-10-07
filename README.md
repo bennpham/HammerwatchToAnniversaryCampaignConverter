@@ -28,24 +28,38 @@ every reference to AE's remade asset instead.
 
 ## Install
 
-Python 3.10+, no required dependencies. Pillow is optional (level previews and the
-scenario thumbnail).
+Python 3.10+ and git. Installing pulls in the two dependencies every machine needs:
+[HW2A000FF](https://github.com/bennpham/HW2A000FF-AllPlatform-Remake), pinned to one commit,
+which ports HW1 art AE has no counterpart for (floor buttons, pillars, ledges, exits, water...),
+and Pillow, which pads that art's textures to the power-of-two sizes AE requires.
 
 ```
-pip install -e .[preview,test]     # or just run it with  python -m hw2ae  from src/
-pip install -e .[port]             # optional: port HW1 art AE has no counterpart for (below)
+pip install -e .[test]
+python -m hw2ae doctor
 ```
+
+On another machine, or after pulling changes, run the same two commands. `doctor` lists what it
+found and ends with "Ready" when that machine will convert exactly like any other. Each
+`convert` also prints the hw2ae commit, the HW2A000FF version and where the HW1 art came from,
+so you can see why two machines' output differs.
 
 The Hammerwatch Anniversary Edition install and its `unpacked_assets_*` folder are found
 automatically on any Steam library drive; override with `--ae-root` / `--ae-assets` or the
-`HW2AE_AE_ROOT` / `HW2AE_AE_ASSETS` environment variables. `python -m hw2ae doctor` shows
-what was found.
+`HW2AE_AE_ROOT` / `HW2AE_AE_ASSETS` environment variables. HW1's stock art is read from
+`Hammerwatch/assets.bin` (unpacked once into `%LOCALAPPDATA%\hw2ae\hw1_assets`), or from
+`Hammerwatch/editor/assetsExtract` if HW1's `ResourceExtractor.exe` has been run; the two are
+identical. Override with `--hw1-assets` (a folder or an `assets.bin`) or the `HW2AE_HW1_ROOT` /
+`HW2AE_HW1_ASSETS` environment variables.
+
+`convert` stops with an error if the machine can't port HW1 art (HW2A000FF, Pillow or HW1
+missing), rather than writing a scenario with floor buttons and exits missing. Pass
+`--allow-missing-art` to convert anyway.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `convert <mission>` | Convert, validate and pack. `--out`, `--name`, `--id`, `--lighting hw1\|theme`, `--max-players N`, `--no-pack`. |
+| `convert <mission>` | Convert, validate and pack. `--out`, `--name`, `--id`, `--lighting hw1\|theme`, `--max-players N`, `--no-pack`, `--hw1-assets`, `--allow-missing-art`. |
 | `validate <folder>` | Check a scenario folder: missing units/tilesets/prefabs/environments, broken script links, level exits to nowhere. |
 | `pack <folder>` | Build `scenarios/<folder name>.h1c` from a scenario folder (e.g. after editing it in the editor). |
 | `preview <level.lvl>` | Render a PNG of an AE level with AE's sprites, to eyeball alignment. |
@@ -117,9 +131,8 @@ correspondences and pixel offsets.
   art keeps HW1's draw order (a boat's rower stays on top of the boat). AE's player is wider
   than HW1's (collision radius 5.5 vs 3.5), so the chambers bridge planks, whose rails leave a
   10-11 px walkway, get a scenario copy with each rail moved back 2 px. Custom files come from
-  the mission folder, stock ones from HW1's extracted assets (`Hammerwatch/editor/assetsExtract`,
-  written by HW1's `ResourceExtractor.exe`; override with `--hw1-assets`). Items and actors are
-  never ported: their gameplay parameters differ between the engines. Any unit or tileset in
+  the mission folder, stock ones from HW1's own assets (`Hammerwatch/assets.bin`, see Install).
+  Items and actors are never ported: their gameplay parameters differ between the engines. Any unit or tileset in
   the scenario pointing at Heroes of Hammerwatch's `system/hammerwatch.mats` (from any tool) is
   rewritten to AE's `system/default.mats` when packing, and `validate` flags leftovers.
 - **Lighting.** AE's themed environments are dark and expect many light sources. A HW1 level
