@@ -5,7 +5,9 @@ most nodes translate one to one. The differences handled here:
 
 * HW1 shapes (``RectangleShape`` / ``CircleShape``) are AE physics units, not
   scripts; triggers point at them through their ``Areas`` array.
-* ``LevelExitArea`` is two AE scripts: an ``AreaTrigger`` wired to a ``LevelExit``
+* ``LevelExitArea`` waits for the whole party, as in HW1: an ``AreaTrigger`` runs
+  an ``AllPlayersArea`` whose ``OnTrue`` is the ``LevelExit`` and whose
+  ``OnFalse`` announces "gather your party", the check AE Castle's exits make
   (just the ``LevelExit`` when it has no shape and only other scripts fire it).
 * ``AllPlayersAreaTrigger`` fires through its ``OnAllEntered`` feed, not links.
 * ``PlaySound`` takes an AE FMOD event, looked up in ``mapping/data/sounds.json``.
@@ -46,6 +48,8 @@ TILE = 16
 SHOP_ICON = 4
 # WorldScript::ShopAreaType.Power
 SHOP_TYPE_POWER = 1
+# What AE Castle's exits announce while some players are still missing.
+GATHER_PARTY = ".meta.info.gatherparty"
 
 # AE scripts that fire their targets through a named feed rather than links.
 FEED_LINKS = {"AllPlayersAreaTrigger": "OnAllEntered"}
@@ -355,13 +359,27 @@ def _convert_node(n: ScriptNode, ctx: ScriptContext) -> list[Script] | None:
             exit_.params.append(Param("string", "StartID", start_id))
         if not areas:
             return [exit_]
+        # HW1 waits until every player stands in the exit, showing "n/m" until
+        # then. AE Castle's exits check the same with an AllPlayersArea (dead
+        # players skipped) and say "gather your party" otherwise; Castle asks
+        # for Use, HW1 is walk-in, so a player entering runs the check.
+        if len(areas) > 1:
+            ctx.warn(f"level exit #{n.id} has {len(areas)} shapes; AE's AllPlayersArea checks the first")
         trig = Script("AreaTrigger", sid, x, y, params=[
             Param("int", "Event", 1),
             Param("ids", "Areas", areas),
             Param("int", "Filter", 2),
         ])
-        trig.connections.append((exit_.id, 0))
-        return [trig, exit_]
+        wait = Script("AnnounceText", ctx.level.new_id(), x + 16, y + 16, label="gather party",
+                      params=[Param("string", "Text", GATHER_PARTY)])
+        check = Script("AllPlayersArea", ctx.level.new_id(), x + 8, y, params=[
+            Param("bool", "OnlyAlivePlayers", False),
+            Param("ids", "Area", areas[:1]),
+            Param("ids", "OnTrue", [exit_.id]),
+            Param("ids", "OnFalse", [wait.id]),
+        ])
+        trig.connections.append((check.id, 0))
+        return [trig, check, wait, exit_]
 
     if t == "AllPlayersAreaTrigger":
         # Fires when every (living) player stands in the area. Its links go in

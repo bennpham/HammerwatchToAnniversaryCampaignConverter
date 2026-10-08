@@ -109,8 +109,10 @@ correspondences and pixel offsets.
   …) by measured overlap. AE picks tile variants and borders itself, so only "painted or not"
   carries over.
 - **Scripts.** `LevelStart`, `AreaTrigger`, `AnnounceText`, `ToggleElement` → `ToggleScripts`,
-  `ObjectEventTrigger(Destroyed)` → `UnitDestroyedTrigger`, `LevelExitArea` → `AreaTrigger` +
-  `LevelExit`, `GameEnd` → `AnnounceText` + `ShowGameOver` (credits). Shapes become
+  `ObjectEventTrigger(Destroyed)` → `UnitDestroyedTrigger`, `LevelExitArea` → `AreaTrigger` →
+  `AllPlayersArea` (`OnTrue` the `LevelExit`, `OnFalse` "gather your party", as AE Castle's
+  exits check; HW1 also waits for every player), `GameEnd` → `AnnounceText` + `ShowGameOver`
+  (credits). Shapes become
   `:Physics_Rectangle` / `:Physics_Circle` areas (HW1 circles give a diameter in tiles). HW1
   counts an actor dying inside an area as leaving it; AE doesn't, so an exit trigger for actors
   also watches its own `AllInside` for deaths. HW1's `Counter` counts down and `IncrementCounter`
