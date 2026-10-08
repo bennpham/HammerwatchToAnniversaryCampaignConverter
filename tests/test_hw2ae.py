@@ -247,7 +247,14 @@ def test_scripts_exit_shop_and_game_end():
     assert Param("target", "#PlayerTarget", (use.id, "User")) in shop.params
     trig = next(s for s in out.scripts if s.cls == "AreaTrigger")
     exit_ = next(s for s in out.scripts if s.cls == "LevelExit")
-    assert trig.connections == [(exit_.id, 0)]
+    # HW1 exits wait for every player; so do AE Castle's, via AllPlayersArea.
+    check = next(s for s in out.scripts if s.cls == "AllPlayersArea")
+    wait = next(s for s in out.scripts if s.cls == "AnnounceText" and s.label == "gather party")
+    assert trig.connections == [(check.id, 0)]
+    assert Param("ids", "OnTrue", [exit_.id]) in check.params
+    assert Param("ids", "OnFalse", [wait.id]) in check.params
+    assert Param("bool", "OnlyAlivePlayers", False) in check.params
+    assert Param("string", "Text", ".meta.info.gatherparty") in wait.params
     assert Param("string", "Level", "levels/test/level1.lvl") in exit_.params
     # HW1 start id 0 is AE's default spawn: no StartID at all, on both ends.
     start = next(s for s in out.scripts if s.cls == "LevelStart")
@@ -257,6 +264,7 @@ def test_scripts_exit_shop_and_game_end():
     exit_rect = next(r for r in rects if r.state["size"] == ("vec2", (32.0, 16.0)))
     areas = next(p for p in trig.params if p.name == "Areas")
     assert areas.value == [exit_rect.id]
+    assert Param("ids", "Area", [exit_rect.id]) in check.params
 
     lv1 = hw1_level.load(FIX / "levels" / "level1.xml")
     out1 = Level("DungeonGameMode", None)
